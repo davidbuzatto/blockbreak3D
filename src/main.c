@@ -15,19 +15,19 @@
 int main( void ) {
 
     GameWindow *gameWindow = createGameWindow(
-        800,             // width
-        450,             // height
-        "Window Title",  // title
-        60,              // target FPS
-        true,            // antialiasing
-        false,           // resizable
-        false,           // full screen
-        false,           // undecorated
-        false,           // always on top
-        false,           // invisible background
-        false,           // always run
-        false,           // load resources
-        false            // init audio
+        800,              // width
+        450,              // height
+        "Block Break 3D", // title
+        60,               // target FPS
+        true,             // antialiasing
+        false,            // resizable
+        false,            // full screen
+        false,            // undecorated
+        false,            // always on top
+        false,            // invisible background
+        false,            // always run
+        false,            // load resources
+        false             // init audio
     );
 
     initGameWindow( gameWindow );

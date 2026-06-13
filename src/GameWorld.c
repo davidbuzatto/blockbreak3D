@@ -8,14 +8,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "raylib/raylib.h"
+#include "raylib/raymath.h"
+
 #include "GameWorld.h"
 #include "ResourceManager.h"
+#include "Map.h"
+#include "Player.h"
 
-#include "raylib/raylib.h"
-//#include "raylib/raymath.h"
-//#define RAYGUI_IMPLEMENTATION    // to use raygui, comment these three lines.
-//#include "raylib/raygui.h"       // other compilation units must only include
-//#undef RAYGUI_IMPLEMENTATION     // raygui.h
+void updateCamera( Camera3D *camera, Player *player );
+float cameraOffsetY = 5.0f;
+float cameraOffsetZ = 10.0f;
 
 /**
  * @brief Creates a dinamically allocated GameWorld struct instance.
@@ -24,43 +27,64 @@ GameWorld *createGameWorld( void ) {
 
     GameWorld *gw = (GameWorld*) malloc( sizeof( GameWorld ) );
 
-    gw->dummy = 0;
+    int rows = 60;
+    int cols = 60;
+    int layers = 20;
+
+    gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
+    gw->player = createPlayer( 0, layers / 2 + 1, 0, 1, BLUE );
+
+    gw->camera.position = (Vector3) { 0.0f, 0.0f, 0.0f };
+    gw->camera.target = gw->player->pos;
+    gw->camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
+    gw->camera.fovy = 60.0f;
+    gw->camera.projection = CAMERA_PERSPECTIVE;
 
     return gw;
 
 }
 
-/**
- * @brief Destroys a GameWindow object and its dependecies.
- */
 void destroyGameWorld( GameWorld *gw ) {
+    destroyPlayer( gw->player );
     free( gw );
 }
 
-/**
- * @brief Reads user input and updates the state of the game.
- */
 void updateGameWorld( GameWorld *gw, float delta ) {
+
+    gw->player->input( gw->player );
+    gw->player->update( gw->player, delta );
+
+    float w = GetMouseWheelMove();
+    if ( w < 0 ) {
+        cameraOffsetZ += 0.2f;
+        cameraOffsetY += 0.2f;
+    } else if ( w > 0 ) {
+        cameraOffsetZ -= 0.2f;
+        cameraOffsetY -= 0.2f;
+    }
+
+    updateCamera( &gw->camera, gw->player );
 
 }
 
-/**
- * @brief Draws the state of the game.
- */
 void drawGameWorld( GameWorld *gw ) {
 
     BeginDrawing();
     ClearBackground( WHITE );
 
-    const char *text = "Basic game template";
-    Vector2 m = MeasureTextEx( GetFontDefault(), text, 40, 4 );
-    int x = GetScreenWidth() / 2 - m.x / 2;
-    int y = GetScreenHeight() / 2 - m.y / 2;
-    DrawRectangle( x, y, m.x, m.y, BLACK );
-    DrawText( text, x, y, 40, WHITE );
-
-    DrawFPS( 20, 20 );
+    BeginMode3D( gw->camera );
+    gw->map->draw( gw->map, &gw->camera );
+    gw->player->draw( gw->player );
+    DrawGrid( 100, 1 );
+    EndMode3D();
 
     EndDrawing();
+
+}
+
+void updateCamera( Camera3D *camera, Player *player ) {
+
+    camera->position = (Vector3) { player->pos.x, player->pos.y + cameraOffsetY, player->pos.z + cameraOffsetZ };
+    camera->target = player->pos;
 
 }

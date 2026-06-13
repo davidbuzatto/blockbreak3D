@@ -7,8 +7,15 @@
  */
 #pragma once
 
+#include "raylib/raylib.h"
+
+#include "Map.h"
+#include "Player.h"
+
 typedef struct GameWorld {
-    int dummy;
+    Map *map;
+    Player *player;
+    Camera3D camera;
 } GameWorld;
 
 /**
