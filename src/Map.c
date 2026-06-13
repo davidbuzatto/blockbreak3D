@@ -10,6 +10,11 @@
 #include "ResourceManager.h"
 
 static void fillMap( Map *map, float scale, float seed );
+
+// face culling -> draws only blocks that make contact with "air"
+static bool isSolid( Map *map, int la, int i, int j );
+static bool isBlockHidden( Map *map, int la, int i, int j );
+
 static void draw( Map *map, Camera3D *camera );
 static void drawBlock( Block *block );
 
@@ -99,13 +104,49 @@ static void fillMap( Map *map, float scale, float seed ) {
 
 }
 
+static bool isSolid( Map *map, int la, int i, int j ) {
+
+    // checks limits
+    if ( la < 0 || la >= map->layers  ||
+          i < 0 ||  i >= map->rows    ||
+          j < 0 ||  j >= map->columns ) {
+        return false;
+    }
+
+    int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+
+    return !map->blocks[p].broken;
+
+}
+
+static bool isBlockHidden( Map *map, int la, int i, int j ) {
+    return isSolid( map, la + 1, i, j ) &&  // up
+           isSolid( map, la - 1, i, j ) &&  // down
+           isSolid( map, la, i + 1, j ) &&  // front
+           isSolid( map, la, i - 1, j ) &&  // back
+           isSolid( map, la, i, j + 1 ) &&  // right
+           isSolid( map, la, i, j - 1 );    // left
+}
+
 static void draw( Map *map, Camera3D *camera ) {
 
     for ( int la = 0; la < map->layers; la++ ) {
         for ( int i = 0; i < map->rows; i++ ) {
             for ( int j = 0; j < map->columns; j++ ) {
+
                 int p = la * ( map->rows * map->columns ) + i * map->columns + j;
-                drawBlock( &map->blocks[p] );
+                Block *b = &map->blocks[p];
+
+                if ( b->broken ) {
+                    continue;
+                }
+
+                if ( isBlockHidden( map, la, i, j ) ) {
+                    continue;
+                }
+
+                drawBlock( b );
+
             }
 
         }
@@ -114,8 +155,6 @@ static void draw( Map *map, Camera3D *camera ) {
 }
 
 static void drawBlock( Block *block ) {
-    if ( !block->broken ) {
-        DrawCubeV( block->pos, block->dim, block->color );
-        DrawCubeWiresV( block->pos, block->dim, BLACK );
-    }
+    DrawCubeV( block->pos, block->dim, block->color );
+    DrawCubeWiresV( block->pos, block->dim, BLACK );
 }

@@ -29,7 +29,7 @@ GameWorld *createGameWorld( void ) {
 
     int rows = 60;
     int cols = 60;
-    int layers = 20;
+    int layers = 30;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
     gw->player = createPlayer( 0, layers / 2 + 1, 0, 1, BLUE );
@@ -77,6 +77,8 @@ void drawGameWorld( GameWorld *gw ) {
     gw->player->draw( gw->player );
     DrawGrid( 100, 1 );
     EndMode3D();
+
+    DrawFPS( 10, 10 );
 
     EndDrawing();
 
