@@ -29,10 +29,10 @@ GameWorld *createGameWorld( void ) {
 
     int rows = 60;
     int cols = 60;
-    int layers = 30;
+    int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
-    gw->player = createPlayer( 0, layers / 2 + 1, 0, 1, BLUE );
+    gw->player = createPlayer( 0, layers / 2, 0, 1, BLUE );
 
     gw->camera.position = (Vector3) { 0.0f, 0.0f, 0.0f };
     gw->camera.target = gw->player->pos;

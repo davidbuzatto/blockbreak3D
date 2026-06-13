@@ -14,21 +14,22 @@ typedef struct {
     int di;
     int dj;
     float corners[4][3];
+    float shade;
 } CubeFace;
 
 static const CubeFace cubeFaces[6] = {
     // +X (direita): vizinho em j+1
-    {  0,  0,  1, { {1,-1,-1}, {1,1,-1}, {1,1,1}, {1,-1,1} } },
+    {  0,  0,  1, { {1,-1,-1}, {1,1,-1}, {1,1,1}, {1,-1,1} }, 0.8f },
     // -X (esquerda): vizinho em j-1
-    {  0,  0, -1, { {-1,-1,1}, {-1,1,1}, {-1,1,-1}, {-1,-1,-1} } },
+    {  0,  0, -1, { {-1,-1,1}, {-1,1,1}, {-1,1,-1}, {-1,-1,-1} }, 0.65f },
     // +Y (cima): vizinho em la+1
-    {  1,  0,  0, { {-1,1,-1}, {-1,1,1}, {1,1,1}, {1,1,-1} } },
+    {  1,  0,  0, { {-1,1,-1}, {-1,1,1}, {1,1,1}, {1,1,-1} }, 1.0f },
     // -Y (baixo): vizinho em la-1
-    { -1,  0,  0, { {-1,-1,-1}, {1,-1,-1}, {1,-1,1}, {-1,-1,1} } },
+    { -1,  0,  0, { {-1,-1,-1}, {1,-1,-1}, {1,-1,1}, {-1,-1,1} }, 0.5f },
     // +Z (frente): vizinho em i+1
-    {  0,  1,  0, { {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1} } },
+    {  0,  1,  0, { {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1} }, 0.75f },
     // -Z (trás): vizinho em i-1
-    {  0, -1,  0, { {-1,-1,-1}, {-1,1,-1}, {1,1,-1}, {1,-1,-1} } },
+    {  0, -1,  0, { {-1,-1,-1}, {-1,1,-1}, {1,1,-1}, {1,-1,-1} }, 0.6f },
 };
 
 static void fillMap( Map *map, float scale, float seed );
@@ -51,7 +52,7 @@ Map *createMap( int x, int y, int z, int layers, int rows, int columns, int bloc
     new->blockSize = blockSize;
     new->blocks = (Block*) malloc( sizeof( Block ) * new->layers * new->rows * new->columns );
 
-    fillMap( new, 0.1f, 0 );
+    fillMap( new, 0.05f, 0 );
     //fillMap( new, 0.1f, GetRandomValue( 0, 10000 ) );
     buildMesh( new );
 
@@ -72,8 +73,11 @@ void destroyMap( Map *map ) {
 static void fillMap( Map *map, float scale, float seed ) {
 
     // sea level
-    int baseHeight = map->layers / 2;
-    int amplitude = map->layers / 2;
+    /*int baseHeight = map->layers / 2;
+    int amplitude = map->layers / 2;*/
+
+    int baseHeight = 10;
+    int amplitude = 10;
 
     for ( int i = 0; i < map->rows; i++ ) {
         for ( int j = 0; j < map->columns; j++ ) {
@@ -97,6 +101,14 @@ static void fillMap( Map *map, float scale, float seed ) {
                 int materialsToAquire = 0;
 
                 bool broken = la > h;
+
+                if ( la == h ) {
+                    color = GREEN;
+                } else if ( la >= h - 2 ) {
+                    color = BROWN;
+                } else {
+                    color = GRAY;
+                }
 
                 int p = la * ( map->rows * map->columns ) + i * map->columns + j;
                 map->blocks[p] = (Block) {
@@ -154,8 +166,10 @@ static void buildMesh( Map *map ) {
     mesh.vertexCount = vertexCount;
     mesh.triangleCount = faceCount * 2;
     mesh.vertices = (float*) MemAlloc( vertexCount * 3 * sizeof( float ) );
+    mesh.colors = (unsigned char*) MemAlloc( vertexCount * 4 * sizeof( unsigned char ) );
 
     int v = 0;
+    int ci = 0;
     static const int order[6] = { 0, 1, 2, 0, 2, 3 };
 
     for ( int la = 0; la < map->layers; la++ ) {
@@ -168,6 +182,7 @@ static void buildMesh( Map *map ) {
 
                 int p = la * ( map->rows * map->columns ) + i * map->columns + j;
                 Vector3 center = map->blocks[p].pos;
+                Color color = map->blocks[p].color;
 
                 for ( int f = 0; f < 6; f++ ) {
 
@@ -179,10 +194,18 @@ static void buildMesh( Map *map ) {
                     }
 
                     for ( int k = 0; k < 6; k++ ) {
+
                         const float *c = face->corners[order[k]];
+
                         mesh.vertices[v++] = center.x + c[0] * hs;
                         mesh.vertices[v++] = center.y + c[1] * hs;
                         mesh.vertices[v++] = center.z + c[2] * hs;
+
+                        mesh.colors[ci++] = (unsigned char) ( color.r * face->shade );
+                        mesh.colors[ci++] = (unsigned char) ( color.g * face->shade );
+                        mesh.colors[ci++] = (unsigned char) ( color.b * face->shade );
+                        mesh.colors[ci++] = 255;
+
                     }
 
                 }
@@ -195,7 +218,7 @@ static void buildMesh( Map *map ) {
     map->mesh = mesh;
 
     map->material = LoadMaterialDefault();
-    map->material.maps[MATERIAL_MAP_DIFFUSE].color = ORANGE;
+    map->material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
 
 
 }
