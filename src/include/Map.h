@@ -1,6 +1,7 @@
 #pragma once
 
 #include "raylib/raylib.h"
+#include "raylib/raymath.h"
 
 #include "Block.h"
 
@@ -15,6 +16,9 @@ struct Map {
 
     int blockSize;
     Block *blocks;
+
+    Mesh mesh;
+    Material material;
 
     void (*draw)( Map *map, Camera3D *camera );
 

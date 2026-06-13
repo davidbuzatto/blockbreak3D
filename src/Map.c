@@ -9,14 +9,32 @@
 #include "Map.h"
 #include "ResourceManager.h"
 
+typedef struct {
+    int dla;
+    int di;
+    int dj;
+    float corners[4][3];
+} CubeFace;
+
+static const CubeFace cubeFaces[6] = {
+    // +X (direita): vizinho em j+1
+    {  0,  0,  1, { {1,-1,-1}, {1,1,-1}, {1,1,1}, {1,-1,1} } },
+    // -X (esquerda): vizinho em j-1
+    {  0,  0, -1, { {-1,-1,1}, {-1,1,1}, {-1,1,-1}, {-1,-1,-1} } },
+    // +Y (cima): vizinho em la+1
+    {  1,  0,  0, { {-1,1,-1}, {-1,1,1}, {1,1,1}, {1,1,-1} } },
+    // -Y (baixo): vizinho em la-1
+    { -1,  0,  0, { {-1,-1,-1}, {1,-1,-1}, {1,-1,1}, {-1,-1,1} } },
+    // +Z (frente): vizinho em i+1
+    {  0,  1,  0, { {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1} } },
+    // -Z (trás): vizinho em i-1
+    {  0, -1,  0, { {-1,-1,-1}, {-1,1,-1}, {1,1,-1}, {1,-1,-1} } },
+};
+
 static void fillMap( Map *map, float scale, float seed );
-
-// face culling -> draws only blocks that make contact with "air"
+static void buildMesh( Map *map );
 static bool isSolid( Map *map, int la, int i, int j );
-static bool isBlockHidden( Map *map, int la, int i, int j );
-
 static void draw( Map *map, Camera3D *camera );
-static void drawBlock( Block *block );
 
 Map *createMap( int x, int y, int z, int layers, int rows, int columns, int blockSize ) {
 
@@ -35,6 +53,7 @@ Map *createMap( int x, int y, int z, int layers, int rows, int columns, int bloc
 
     fillMap( new, 0.1f, 0 );
     //fillMap( new, 0.1f, GetRandomValue( 0, 10000 ) );
+    buildMesh( new );
 
     new->draw = draw;
 
@@ -44,6 +63,7 @@ Map *createMap( int x, int y, int z, int layers, int rows, int columns, int bloc
 
 void destroyMap( Map *map ) {
     if ( map != NULL ) {
+        UnloadMesh( map->mesh );
         free( map->blocks );
         free( map );
     }
@@ -104,6 +124,82 @@ static void fillMap( Map *map, float scale, float seed ) {
 
 }
 
+static void buildMesh( Map *map ) {
+
+    float hs = map->blockSize / 2.0f; // meio
+
+    // step 1: count visible faces
+    int faceCount = 0;
+    for ( int la = 0; la < map->layers; la++ ) {
+        for ( int i = 0; i < map->rows; i++ ) {
+            for ( int j = 0; j < map->columns; j++ ) {
+                if ( !isSolid( map, la, i, j ) ) {
+                    continue;
+                }
+                for ( int f = 0; f < 6; f++ ) {
+                    const CubeFace *face = &cubeFaces[f];
+                    // if neighbor is air, this face will be showed
+                    if ( !isSolid( map, la + face->dla, i + face->di, j + face->dj ) ) {
+                        faceCount++;
+                    }
+                }
+            }
+        }
+    }
+
+    // step 2: allocate memory and fill vertices
+    int vertexCount = faceCount * 6;
+
+    Mesh mesh = { 0 };
+    mesh.vertexCount = vertexCount;
+    mesh.triangleCount = faceCount * 2;
+    mesh.vertices = (float*) MemAlloc( vertexCount * 3 * sizeof( float ) );
+
+    int v = 0;
+    static const int order[6] = { 0, 1, 2, 0, 2, 3 };
+
+    for ( int la = 0; la < map->layers; la++ ) {
+        for ( int i = 0; i < map->rows; i++ ) {
+            for ( int j = 0; j < map->columns; j++ ) {
+
+                if ( !isSolid( map, la, i, j ) ) {
+                    continue;
+                }
+
+                int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+                Vector3 center = map->blocks[p].pos;
+
+                for ( int f = 0; f < 6; f++ ) {
+
+                    const CubeFace *face = &cubeFaces[f];
+
+                    // ignore face if neighbor is solid
+                    if ( isSolid( map, la + face->dla, i + face->di, j + face->dj ) ) {
+                        continue;
+                    }
+
+                    for ( int k = 0; k < 6; k++ ) {
+                        const float *c = face->corners[order[k]];
+                        mesh.vertices[v++] = center.x + c[0] * hs;
+                        mesh.vertices[v++] = center.y + c[1] * hs;
+                        mesh.vertices[v++] = center.z + c[2] * hs;
+                    }
+
+                }
+
+            }
+        }
+    }
+    
+    UploadMesh( &mesh, false );
+    map->mesh = mesh;
+
+    map->material = LoadMaterialDefault();
+    map->material.maps[MATERIAL_MAP_DIFFUSE].color = ORANGE;
+
+
+}
+
 static bool isSolid( Map *map, int la, int i, int j ) {
 
     // checks limits
@@ -119,42 +215,7 @@ static bool isSolid( Map *map, int la, int i, int j ) {
 
 }
 
-static bool isBlockHidden( Map *map, int la, int i, int j ) {
-    return isSolid( map, la + 1, i, j ) &&  // up
-           isSolid( map, la - 1, i, j ) &&  // down
-           isSolid( map, la, i + 1, j ) &&  // front
-           isSolid( map, la, i - 1, j ) &&  // back
-           isSolid( map, la, i, j + 1 ) &&  // right
-           isSolid( map, la, i, j - 1 );    // left
-}
-
 static void draw( Map *map, Camera3D *camera ) {
-
-    for ( int la = 0; la < map->layers; la++ ) {
-        for ( int i = 0; i < map->rows; i++ ) {
-            for ( int j = 0; j < map->columns; j++ ) {
-
-                int p = la * ( map->rows * map->columns ) + i * map->columns + j;
-                Block *b = &map->blocks[p];
-
-                if ( b->broken ) {
-                    continue;
-                }
-
-                if ( isBlockHidden( map, la, i, j ) ) {
-                    continue;
-                }
-
-                drawBlock( b );
-
-            }
-
-        }
-    }
-
-}
-
-static void drawBlock( Block *block ) {
-    DrawCubeV( block->pos, block->dim, block->color );
-    DrawCubeWiresV( block->pos, block->dim, BLACK );
+    // draws in its position
+    DrawMesh( map->mesh, map->material, MatrixIdentity() );
 }
