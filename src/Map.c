@@ -9,10 +9,10 @@
  *  - The world is a 3D grid of blocks stored in a single linear array
  *    (map->blocks). A block at grid coordinate (la, i, j) lives at index:
  *
- *        p = la * (rows * columns) + i * columns + j
+ *        p = la * (rows * cols) + i * cols + j
  *
  *  - Axis mapping (how grid coordinates relate to world space):
- *        j  (columns) -> X axis
+ *        j  (cols) -> X axis
  *        la (layers)  -> Y axis (height / vertical)
  *        i  (rows)    -> Z axis
  *
@@ -38,6 +38,8 @@
 #include "Macros.h"
 #include "Map.h"
 #include "ResourceManager.h"
+
+#define CHUNK_SIZE 16
 
 /**
  * @brief Static description of one of the six faces of a cube.
@@ -88,15 +90,19 @@ static const CubeFace cubeFaces[6] = {
 
 /* forward declarations of file-private (static) helpers. */
 static void fillMap( Map *map, float scale, float seed );
+static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols );
 static void buildMesh( Map *map );
+static void buildChunks( Map *map );
 static bool isSolid( Map *map, int la, int i, int j );
 static bool isBlockHidden( Map *map, int la, int i, int j );
-static void drawBlock( Block *block );
 
 /* three interchangeable rendering strategies; pick one in createMap(). */
 static void drawNaive( Map *map, Camera3D *camera );
 static void drawCulled( Map *map, Camera3D *camera );
+static void drawBlock( Block *block );
+
 static void drawMesh( Map *map, Camera3D *camera );
+static void drawChunked( Map *map, Camera3D *camera );
 
 /**
  * @brief Creates a dynamically allocated Map, generates its terrain and builds
@@ -105,11 +111,11 @@ static void drawMesh( Map *map, Camera3D *camera );
  * @param x,y,z       World-space position of the map origin (block 0,0,0).
  * @param layers      Number of vertical layers (grid size along Y).
  * @param rows        Number of rows (grid size along Z).
- * @param columns     Number of columns (grid size along X).
+ * @param cols     Number of cols (grid size along X).
  * @param blockSize   Edge length of a single cubic block, in world units.
  * @return Map*       Pointer to the newly created map.
  */
-Map *createMap( int x, int y, int z, int layers, int rows, int columns, int blockSize ) {
+Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSize ) {
 
     Map *new = (Map*) malloc( sizeof( Map ) );
 
@@ -119,26 +125,38 @@ Map *createMap( int x, int y, int z, int layers, int rows, int columns, int bloc
 
     new->layers = layers;
     new->rows = rows;
-    new->columns = columns;
+    new->cols = cols;
 
     new->blockSize = blockSize;
 
     // one contiguous array holding every block of the grid.
-    new->blocks = (Block*) malloc( sizeof( Block ) * new->layers * new->rows * new->columns );
+    new->blocks = (Block*) malloc( sizeof( Block ) * new->layers * new->rows * new->cols );
+
+    // initialize render resources up front so destroyMap is sage no matter
+    // which build steps below are enabled/disabled
+    new->mesh = (Mesh) { 0 };
+    new->chunks = NULL;
+    new->chunkCount = 0;
 
     // generate the terrain (fills the block array).
     fillMap( new, 0.05f, 0 );
     //fillMap( new, 0.1f, GetRandomValue( 0, 10000 ) );
 
+    // material is shared by every mesh-based strategy
+    new->material = LoadMaterialDefault();
+    new->material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+
     // bake the terrain into a mesh. Only needed by drawMesh; if you switch to a
     // cube-by-cube strategy below you may comment this out to skip the cost.
-    buildMesh( new );
+    //buildMesh( new );    // needed by drawMesh
+    buildChunks( new );  // needed by drawChunked
 
     // choose a rendering strategy by uncommenting exactly one. All three produce
     // the same image but with very different performance (good for comparison):
     //new->draw = drawNaive;    // (1) one cube per block, no culling   (slowest)
     //new->draw = drawCulled;   // (2) one cube per block, skip hidden  (faster)
-    new->draw = drawMesh;       // (3) single batched mesh              (fastest)
+    //new->draw = drawMesh;     // (3) single batched mesh              (fastest)
+    new->draw = drawChunked;    // (4) one mesh per chunk
 
     return new;
 
@@ -150,11 +168,23 @@ Map *createMap( int x, int y, int z, int layers, int rows, int columns, int bloc
  * @param map The map to destroy. Safe to call with NULL.
  */
 void destroyMap( Map *map ) {
+
     if ( map != NULL ) {
-        UnloadMesh( map->mesh );   // releases the GPU buffers and CPU vertex data
+
+        UnloadMesh( map->mesh );   // safe even if no created
+
+        if ( map->chunks != NULL ) {
+            for ( int c = 0; c < map->chunkCount; c++ ) {
+                UnloadMesh( map->chunks[c].mesh );
+            }
+            free( map->chunks );
+        }
+
         free( map->blocks );
         free( map );
+        
     }
+
 }
 
 /**
@@ -187,7 +217,7 @@ static void fillMap( Map *map, float scale, float seed ) {
     int amplitude = 10;
 
     for ( int i = 0; i < map->rows; i++ ) {
-        for ( int j = 0; j < map->columns; j++ ) {
+        for ( int j = 0; j < map->cols; j++ ) {
 
             // sample the noise on the horizontal plane only (depends on i, j).
             float nx = ( j + seed ) * scale;
@@ -224,7 +254,7 @@ static void fillMap( Map *map, float scale, float seed ) {
                 }
 
                 // linear index of this block in the flat array.
-                int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
                 map->blocks[p] = (Block) {
                     .pos = {
                         map->pos.x + map->blockSize * j,
@@ -250,32 +280,18 @@ static void fillMap( Map *map, float scale, float seed ) {
 
 }
 
-/**
- * @brief Bakes all visible block faces into a single static mesh and uploads
- *        it to the GPU.
- *
- * Only faces that touch air are emitted (face culling), so the cost is
- * proportional to the terrain's surface area, not its volume. Each emitted face
- * is a quad made of two triangles (6 vertices). Every vertex also stores a
- * color (block color * face shade) so the relief reads as 3D without any real
- * lighting.
- *
- * Two passes are used:
- *   1. Count how many faces will be visible (to know how much memory to alloc).
- *   2. Allocate the vertex/color arrays and fill them.
- *
- * @param map The map whose mesh is built. Stores the result in map->mesh and
- *            a default (white) material in map->material.
- */
-static void buildMesh( Map *map ) {
+static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols ) {
 
     float hs = map->blockSize / 2.0f; // half edge: corners are at center +/- hs
 
-    // pass 1: count the visible faces
+    int iEnd = i0 + rows;
+    int jEnd = j0 + cols;
+
+    // pass 1: count the visible faces in this region
     int faceCount = 0;
     for ( int la = 0; la < map->layers; la++ ) {
-        for ( int i = 0; i < map->rows; i++ ) {
-            for ( int j = 0; j < map->columns; j++ ) {
+        for ( int i = i0; i < iEnd; i++ ) {
+            for ( int j = j0; j < jEnd; j++ ) {
                 if ( !isSolid( map, la, i, j ) ) {
                     continue;                       // empty cell emits no faces
                 }
@@ -307,14 +323,14 @@ static void buildMesh( Map *map ) {
     static const int order[6] = { 0, 1, 2, 0, 2, 3 };
 
     for ( int la = 0; la < map->layers; la++ ) {
-        for ( int i = 0; i < map->rows; i++ ) {
-            for ( int j = 0; j < map->columns; j++ ) {
+        for ( int i = i0; i < iEnd; i++ ) {
+            for ( int j = j0; j < jEnd; j++ ) {
 
                 if ( !isSolid( map, la, i, j ) ) {
                     continue;
                 }
 
-                int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
                 Vector3 center = map->blocks[p].pos;
                 Color color = map->blocks[p].color;
 
@@ -353,12 +369,50 @@ static void buildMesh( Map *map ) {
 
     // upload to the GPU once (false = static; we won't update it every frame).
     UploadMesh( &mesh, false );
-    map->mesh = mesh;
+    return mesh;
 
-    // default material, tinted white so the per-vertex colors show unchanged
-    // (final color = material color * vertex color; white * c == c).
-    map->material = LoadMaterialDefault();
-    map->material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
+}
+
+static void buildMesh( Map *map ) {
+    map->mesh = buildMeshRange( map, 0, 0, map->rows, map->cols );
+}
+
+static void buildChunks( Map *map ) {
+
+    map->chunkCountRows = ( map->rows + CHUNK_SIZE - 1 ) / CHUNK_SIZE;
+    map->chunkCountCols = ( map->cols + CHUNK_SIZE - 1 ) / CHUNK_SIZE;
+    map->chunkCount = map->chunkCountRows * map->chunkCountCols;
+
+    map->chunks = (Chunk*) MemAlloc( sizeof( Chunk )  * map->chunkCount );
+
+    int c = 0;
+    for ( int ci = 0; ci < map->chunkCountRows; ci++ ) {
+        for ( int cj = 0; cj < map->chunkCountCols; cj++ ) {
+
+            int i0 = ci * CHUNK_SIZE;
+            int j0 = cj * CHUNK_SIZE;
+
+            // clamp to prevent run past world bounds
+            int rows = CHUNK_SIZE;
+            int cols = CHUNK_SIZE;
+
+            if ( i0 + rows > map->rows ) {
+                rows = map->rows - i0;
+            }
+            if ( j0 + cols > map->cols ) {
+                cols = map->cols - j0;
+            }
+
+            map->chunks[c++] = (Chunk) {
+                .i0 = i0,
+                .j0 = j0,
+                .rows = rows,
+                .cols = cols,
+                .mesh = buildMeshRange( map, i0, j0, rows, cols )
+            };
+
+        }
+    }
 
 }
 
@@ -377,11 +431,11 @@ static bool isSolid( Map *map, int la, int i, int j ) {
     // out of bounds -> treat as air.
     if ( la < 0 || la >= map->layers  ||
           i < 0 ||  i >= map->rows    ||
-          j < 0 ||  j >= map->columns ) {
+          j < 0 ||  j >= map->cols ) {
         return false;
     }
 
-    int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+    int p = la * ( map->rows * map->cols ) + i * map->cols + j;
 
     // solid means NOT broken.
     return !map->blocks[p].broken;
@@ -409,18 +463,6 @@ static bool isBlockHidden( Map *map, int la, int i, int j ) {
 }
 
 /**
- * @brief Draws a single block as a solid cube with a black wireframe outline.
- *
- * Used by the cube-by-cube strategies (drawNaive / drawCulled).
- *
- * @param block The block to draw.
- */
-static void drawBlock( Block *block ) {
-    DrawCubeV( block->pos, block->dim, block->color );
-    DrawCubeWiresV( block->pos, block->dim, BLACK );
-}
-
-/**
  * @brief Rendering strategy 1: draw every solid block as its own cube, with no
  *        culling at all.
  *
@@ -435,9 +477,9 @@ static void drawNaive( Map *map, Camera3D *camera ) {
 
     for ( int la = 0; la < map->layers; la++ ) {
         for ( int i = 0; i < map->rows; i++ ) {
-            for ( int j = 0; j < map->columns; j++ ) {
+            for ( int j = 0; j < map->cols; j++ ) {
 
-                int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
                 Block *block = &map->blocks[p];
 
                 if ( block->broken ) {
@@ -467,9 +509,9 @@ static void drawCulled( Map *map, Camera3D *camera ) {
 
     for ( int la = 0; la < map->layers; la++ ) {
         for ( int i = 0; i < map->rows; i++ ) {
-            for ( int j = 0; j < map->columns; j++ ) {
+            for ( int j = 0; j < map->cols; j++ ) {
 
-                int p = la * ( map->rows * map->columns ) + i * map->columns + j;
+                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
                 Block *block = &map->blocks[p];
 
                 if ( block->broken ) {
@@ -489,6 +531,18 @@ static void drawCulled( Map *map, Camera3D *camera ) {
 }
 
 /**
+ * @brief Draws a single block as a solid cube with a black wireframe outline.
+ *
+ * Used by the cube-by-cube strategies (drawNaive / drawCulled).
+ *
+ * @param block The block to draw.
+ */
+static void drawBlock( Block *block ) {
+    DrawCubeV( block->pos, block->dim, block->color );
+    DrawCubeWiresV( block->pos, block->dim, BLACK );
+}
+
+/**
  * @brief Rendering strategy 3: draw the whole map with a single draw call using
  *        the pre-built batched mesh.
  *
@@ -501,4 +555,11 @@ static void drawCulled( Map *map, Camera3D *camera ) {
 static void drawMesh( Map *map, Camera3D *camera ) {
     // MatrixIdentity() means "draw the mesh where it already is" (no transform).
     DrawMesh( map->mesh, map->material, MatrixIdentity() );
+}
+
+static void drawChunked( Map *map, Camera3D *camera ) {
+    Matrix transform = MatrixIdentity();
+    for ( int c = 0; c < map->chunkCount; c++ ) {
+        DrawMesh( map->chunks[c].mesh, map->material, transform );
+    }
 }

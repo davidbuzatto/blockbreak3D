@@ -14,6 +14,7 @@
 #include "Block.h"
 
 typedef struct Map Map;
+typedef struct Chunk Chunk;
 
 /**
  * @brief A 3D grid of blocks representing the world's terrain.
@@ -21,23 +22,28 @@ typedef struct Map Map;
  * Blocks are stored in a single linear array (blocks) and addressed by grid
  * coordinates (la, i, j) through:
  *
- *     p = la * (rows * columns) + i * columns + j
+ *     p = la * (rows * cols) + i * cols + j
  *
- * Axis mapping: j (columns) -> X, la (layers) -> Y (height), i (rows) -> Z.
+ * Axis mapping: j (cols) -> X, la (layers) -> Y (height), i (rows) -> Z.
  */
 struct Map {
 
-    Vector3 pos;            // World-space position of grid origin (block 0,0,0).
+    Vector3 pos;            // world-space position of grid origin (block 0,0,0).
 
-    int layers;             // Grid size along Y (vertical layers).
-    int rows;               // Grid size along Z.
-    int columns;            // Grid size along X.
+    int layers;             // grid size along Y (vertical layers).
+    int rows;               // grid size along Z.
+    int cols;               // grid size along X.
 
-    int blockSize;          // Edge length of a cubic block, in world units.
-    Block *blocks;          // Flat array of layers*rows*columns blocks.
+    int blockSize;          // edge length of a cubic block, in world units.
+    Block *blocks;          // flat array of layers*rows*cols blocks.
 
-    Mesh mesh;              // Batched geometry of all visible faces (GPU).
-    Material material;      // Material used to draw the mesh.
+    Mesh mesh;              // batched geometry of all visible faces (GPU).
+    Material material;      // material used to draw the mesh.
+
+    Chunk *chunks;          // array os chunks (NULL if unused)
+    int chunkCountRows;     // number of chunks in Z
+    int chunkCountCols;     // number of chunks in X
+    int chunkCount;         // total chunks (rows * cols)
 
     /**
      * @brief Strategy used to render the map.
@@ -50,10 +56,25 @@ struct Map {
 };
 
 /**
+ * @brief A rectangular slice of the World (full height, 
+ * CHUNK_SIZE x CHUNK_SIZE in X/Z) with is own baked mesh.
+ * 
+ * Chunks do not own data; they only group faces into separate meshes so a
+ * single block edit can rebuild just one slice instead of the whole world. 
+ */
+struct Chunk {
+    int i0;
+    int j0;
+    int rows;
+    int cols;
+    Mesh mesh;
+};
+
+/**
  * @brief Creates a map, generates its terrain and builds its render mesh.
  * @see createMap implementation in Map.c for parameter details.
  */
-Map *createMap( int x, int y, int z, int layers, int rows, int columns, int blockSize );
+Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSize );
 
 /**
  * @brief Frees a map and all resources it owns (GPU mesh and block array).
