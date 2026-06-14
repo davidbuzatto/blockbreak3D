@@ -52,7 +52,7 @@ void destroyGameWorld( GameWorld *gw ) {
 void updateGameWorld( GameWorld *gw, float delta ) {
 
     // breakBlock test (break blocks that are in the player column)
-    if ( IsKeyPressed( KEY_SPACE ) ) {
+    if ( IsKeyDown( KEY_SPACE ) ) {
 
         Map *map = gw->map;
         
@@ -62,11 +62,15 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         int j = (int) roundf( ( gw->player->pos.x - map->pos.x ) / map->blockSize );
         int i = (int) roundf( ( gw->player->pos.z - map->pos.z ) / map->blockSize );
 
-        for ( int la = map->layers - 1; i >= 0; la-- ) {
-            int p = la * ( map->rows * map->cols ) + i * map->cols + j;
-            if ( !map->blocks[p].broken ) {
-                breakBlock( map, la, i, j );
-                break;
+        // only act if the player is actually over the map.
+        if ( i >= 0 && i < map->rows && j >= 0 && j < map->cols ) {
+            // scan top-down for the highest solid block in the column and break it.
+            for ( int la = map->layers - 1; la >= 0; la-- ) {
+                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
+                if ( !map->blocks[p].broken ) {
+                    breakBlock( map, la, i, j );
+                    break;
+                }
             }
         }
 
