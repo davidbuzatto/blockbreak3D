@@ -111,6 +111,8 @@ static void buildMesh( Map *map );
 static void buildChunks( Map *map );
 static bool isSolid( Map *map, int la, int i, int j );
 static bool isBlockHidden( Map *map, int la, int i, int j );
+static int chunkIndexAt( Map *map, int i, int j );
+static void rebuildChunk( Map *map, int chunkIndex );
 
 /* four interchangeable rendering strategies; pick one in createMap(). */
 static void drawNaive( Map *map, Camera3D *camera );
@@ -186,6 +188,9 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
         case MAP_STRATEGY_CHUNKED:
             new->draw = drawChunked;    // (4) one mesh per chunk
             break;
+        default:
+            new->draw = drawChunked;    // fails on purpose
+            break;
     }    
 
     return new;
@@ -214,6 +219,46 @@ void destroyMap( Map *map ) {
         free( map );
         
     }
+
+}
+
+void breakBlock( Map *map, int la, int i, int j ) {
+
+    if ( !isSolid( map, la, i, j ) ) {
+        return;
+    }
+
+    // change data
+    int p = la * ( map->rows * map->cols ) + i * map->cols + j;
+    map->blocks[p].broken = true;
+
+    // update geometry
+    switch ( buildStrategy ) {
+        case MAP_STRATEGY_NAIVE:
+        case MAP_STRATEGY_CULLED:
+            break;
+        case MAP_STRATEGY_MESH:
+            UnloadMesh( map->mesh );
+            buildMesh( map );
+            break;
+        case MAP_STRATEGY_CHUNKED:
+            rebuildChunk( map, chunkIndexAt( map, i, j ) );
+            int li = i % CHUNK_SIZE;
+            int lj = j % CHUNK_SIZE;
+            if ( li == 0 ) {
+                rebuildChunk( map, chunkIndexAt( map, i - 1, j ) );
+            }
+            if ( li == CHUNK_SIZE - 1 ) {
+                rebuildChunk( map, chunkIndexAt( map, i + 1, j ) );
+            }
+            if ( lj == 0 ) {
+                rebuildChunk( map, chunkIndexAt( map, i, j - 1 ) );
+            }
+            if ( lj == CHUNK_SIZE - 1 ) {
+                rebuildChunk( map, chunkIndexAt( map, i, j + 1 ) );
+            }
+            break;
+    } 
 
 }
 
@@ -525,6 +570,31 @@ static bool isBlockHidden( Map *map, int la, int i, int j ) {
            isSolid( map, la, i - 1, j ) &&   // back   (-Z)
            isSolid( map, la, i, j + 1 ) &&   // right  (+X)
            isSolid( map, la, i, j - 1 );     // left   (-X)
+}
+
+static int chunkIndexAt( Map *map, int i, int j ) {
+
+    if ( i < 0 || i >= map->rows || j < 0 || j > map->cols ) {
+        return -1;
+    }
+
+    int ci = i / CHUNK_SIZE;
+    int cj = j / CHUNK_SIZE;
+
+    return ci * map->chunkCountCols + cj;
+
+}
+
+static void rebuildChunk( Map *map, int chunkIndex ) {
+
+    if ( chunkIndex < 0 ) {
+        return;
+    }
+
+    Chunk *ch = &map->chunks[chunkIndex];
+    UnloadMesh( ch->mesh );
+    ch->mesh = buildMeshRange( map, ch->i0, ch->j0, ch->rows, ch->cols );
+
 }
 
 /**

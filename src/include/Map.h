@@ -80,3 +80,9 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
  * @brief Frees a map and all resources it owns (GPU mesh and block array).
  */
 void destroyMap( Map *map );
+
+/**
+ * @brief Breaks (removes) the block at the grid coordinate (la, i, j), turning it
+ *        into air, and update the rendered geometry incrementally.
+ */
+void breakBlock( Map *map, int la, int i, int j );
