@@ -2,7 +2,7 @@
  * @file Map.c
  * @author Prof. Dr. David Buzatto
  * @brief Map implementation: procedural voxel terrain generation and
- *        optimized rendering through a single batched mesh.
+ *        optimized rendering (face culling + batched meshes / chunks).
  *
  * Overview of how the map works:
  *
@@ -21,10 +21,12 @@
  *    flagged as "broken" (air) and never rendered. See fillMap().
  *
  *  - Rendering does NOT draw one cube per block (that would be tens of thousands
- *    of draw calls). Instead, buildMesh() bakes every VISIBLE face into a single
- *    static Mesh that is uploaded to the GPU once and drawn with a single
- *    DrawMesh() call. A face is "visible" only when the neighbor block on that
- *    side is air (face culling), so buried blocks cost nothing.
+ *    of draw calls). Instead, the visible faces are baked into static meshes that
+ *    are uploaded to the GPU once and drawn with DrawMesh(). A face is "visible"
+ *    only when the neighbor block on that side is air (face culling), so buried
+ *    blocks cost nothing. The world can be baked either as one big mesh
+ *    (buildMesh / drawMesh) or split into per-chunk meshes (buildChunks /
+ *    drawChunked) so a single edit later rebuilds just one chunk.
  *
  * @copyright Copyright (c) 2026
  */
@@ -40,6 +42,19 @@
 #include "ResourceManager.h"
 
 #define CHUNK_SIZE 16
+
+/**
+ * @brief Defines the types of build strategies that can be used to create 
+ * and process the map.
+ */
+typedef enum {
+    BUILD_STRATEGY_NAIVE,   // block by block
+    BUILD_STRATEGY_CULLED,  // block by block with face culling
+    BUILD_STRATEGY_MESH,    // one mesh
+    BUILD_STRATEGY_CHUNKED  // mesh chunks
+} BuildStrategy;
+
+const BuildStrategy buildStrategy = BUILD_STRATEGY_CHUNKED;
 
 /**
  * @brief Static description of one of the six faces of a cube.
@@ -96,13 +111,14 @@ static void buildChunks( Map *map );
 static bool isSolid( Map *map, int la, int i, int j );
 static bool isBlockHidden( Map *map, int la, int i, int j );
 
-/* three interchangeable rendering strategies; pick one in createMap(). */
+/* four interchangeable rendering strategies; pick one in createMap(). */
 static void drawNaive( Map *map, Camera3D *camera );
 static void drawCulled( Map *map, Camera3D *camera );
-static void drawBlock( Block *block );
-
 static void drawMesh( Map *map, Camera3D *camera );
 static void drawChunked( Map *map, Camera3D *camera );
+
+/* helper shared by the cube-by-cube strategies (drawNaive / drawCulled). */
+static void drawBlock( Block *block );
 
 /**
  * @brief Creates a dynamically allocated Map, generates its terrain and builds
@@ -111,7 +127,7 @@ static void drawChunked( Map *map, Camera3D *camera );
  * @param x,y,z       World-space position of the map origin (block 0,0,0).
  * @param layers      Number of vertical layers (grid size along Y).
  * @param rows        Number of rows (grid size along Z).
- * @param cols     Number of cols (grid size along X).
+ * @param cols     Number of columns (grid size along X).
  * @param blockSize   Edge length of a single cubic block, in world units.
  * @return Map*       Pointer to the newly created map.
  */
@@ -132,8 +148,8 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     // one contiguous array holding every block of the grid.
     new->blocks = (Block*) malloc( sizeof( Block ) * new->layers * new->rows * new->cols );
 
-    // initialize render resources up front so destroyMap is sage no matter
-    // which build steps below are enabled/disabled
+    // initialize render resources up front so destroyMap is safe no matter
+    // which build steps below are enabled/disabled.
     new->mesh = (Mesh) { 0 };
     new->chunks = NULL;
     new->chunkCount = 0;
@@ -146,17 +162,30 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     new->material = LoadMaterialDefault();
     new->material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
 
-    // bake the terrain into a mesh. Only needed by drawMesh; if you switch to a
-    // cube-by-cube strategy below you may comment this out to skip the cost.
-    //buildMesh( new );    // needed by drawMesh
-    buildChunks( new );  // needed by drawChunked
+    // build geometry for the mesh-based strategy you'll use; comment out the one
+    // you don't need to save build time/memory.
+    if ( buildStrategy == BUILD_STRATEGY_MESH ) {
+        buildMesh( new );      // needed by drawMesh    (one mesh for the whole world)
+    } else if ( buildStrategy == BUILD_STRATEGY_CHUNKED ) {
+        buildChunks( new );    // needed by drawChunked (one mesh per chunk)
+    }
 
-    // choose a rendering strategy by uncommenting exactly one. All three produce
+    // choose a rendering strategy by uncommenting exactly one. All four produce
     // the same image but with very different performance (good for comparison):
-    //new->draw = drawNaive;    // (1) one cube per block, no culling   (slowest)
-    //new->draw = drawCulled;   // (2) one cube per block, skip hidden  (faster)
-    //new->draw = drawMesh;     // (3) single batched mesh              (fastest)
-    new->draw = drawChunked;    // (4) one mesh per chunk
+    switch ( buildStrategy ) {
+        case BUILD_STRATEGY_NAIVE:
+            new->draw = drawNaive;    // (1) one cube per block, no culling   (slowest)
+            break;
+        case BUILD_STRATEGY_CULLED:
+            new->draw = drawCulled;   // (2) one cube per block, skip hidden  (faster)
+            break;
+        case BUILD_STRATEGY_MESH:
+            new->draw = drawMesh;     // (3) single batched mesh              (fastest)
+            break;
+        case BUILD_STRATEGY_CHUNKED:
+            new->draw = drawChunked;    // (4) one mesh per chunk
+            break;
+    }    
 
     return new;
 
@@ -171,7 +200,7 @@ void destroyMap( Map *map ) {
 
     if ( map != NULL ) {
 
-        UnloadMesh( map->mesh );   // safe even if no created
+        UnloadMesh( map->mesh );   // safe even if it was never built (zeroed)
 
         if ( map->chunks != NULL ) {
             for ( int c = 0; c < map->chunkCount; c++ ) {
@@ -280,6 +309,20 @@ static void fillMap( Map *map, float scale, float seed ) {
 
 }
 
+/**
+ * @brief Builds and uploads a mesh with the visible faces of the blocks in a
+ *        rectangular region: all layers, rows [i0, i0+rows), cols [j0, j0+cols).
+ *
+ * Neighbor tests use the GLOBAL block array, so face culling stays correct at
+ * the borders between regions (a face on a chunk edge is hidden when the block
+ * just across the border, in the next chunk, is solid). buildMesh() uses this
+ * for the whole world; buildChunks() calls it once per chunk.
+ *
+ * @param map           The map.
+ * @param i0, j0        First row/column of the region (inclusive).
+ * @param rows, cols    How many rows/columns the region spans.
+ * @return The uploaded mesh (the caller stores it).
+ */
 static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols ) {
 
     float hs = map->blockSize / 2.0f; // half edge: corners are at center +/- hs
@@ -306,7 +349,7 @@ static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols ) {
         }
     }
 
-    // Pass 2: allocate and fill the vertex data
+    // pass 2: allocate and fill the vertex data
     int vertexCount = faceCount * 6;                // 6 vertices per face (2 triangles)
 
     Mesh mesh = { 0 };                              // zero every field first
@@ -373,26 +416,46 @@ static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols ) {
 
 }
 
+/**
+ * @brief Builds the single whole-world mesh used by drawMesh.
+ *
+ * Convenience wrapper around buildMeshRange(): the whole world is just the
+ * region that covers every row and column.
+ *
+ * @param map The map; the result is stored in map->mesh.
+ */
 static void buildMesh( Map *map ) {
     map->mesh = buildMeshRange( map, 0, 0, map->rows, map->cols );
 }
 
+/**
+ * @brief Splits the world into a 2D grid of full-height chunks and builds one
+ *        mesh per chunk. Used by drawChunked.
+ *
+ * Each chunk covers all layers and up to CHUNK_SIZE x CHUNK_SIZE blocks in X/Z.
+ * A chunk stores only its grid range and a mesh; the block data stays in the
+ * shared map->blocks array.
+ *
+ * @param map The map; results are stored in map->chunks and the chunk counts.
+ */
 static void buildChunks( Map *map ) {
 
+    // number of chunks along each axis (round up so edge chunks are included).
     map->chunkCountRows = ( map->rows + CHUNK_SIZE - 1 ) / CHUNK_SIZE;
     map->chunkCountCols = ( map->cols + CHUNK_SIZE - 1 ) / CHUNK_SIZE;
     map->chunkCount = map->chunkCountRows * map->chunkCountCols;
 
-    map->chunks = (Chunk*) MemAlloc( sizeof( Chunk )  * map->chunkCount );
+    map->chunks = (Chunk*) MemAlloc( sizeof( Chunk ) * map->chunkCount );
 
     int c = 0;
     for ( int ci = 0; ci < map->chunkCountRows; ci++ ) {
         for ( int cj = 0; cj < map->chunkCountCols; cj++ ) {
 
+            // top-left block of this chunk in grid coordinates.
             int i0 = ci * CHUNK_SIZE;
             int j0 = cj * CHUNK_SIZE;
 
-            // clamp to prevent run past world bounds
+            // clamp edge chunks so they don't run past the world bounds.
             int rows = CHUNK_SIZE;
             int cols = CHUNK_SIZE;
 
@@ -403,6 +466,7 @@ static void buildChunks( Map *map ) {
                 cols = map->cols - j0;
             }
 
+            // store the chunk's range and bake its mesh.
             map->chunks[c++] = (Chunk) {
                 .i0 = i0,
                 .j0 = j0,
@@ -557,7 +621,18 @@ static void drawMesh( Map *map, Camera3D *camera ) {
     DrawMesh( map->mesh, map->material, MatrixIdentity() );
 }
 
+/**
+ * @brief Rendering strategy 4: draw one mesh per chunk.
+ *
+ * Same image as drawMesh, just split across chunks. By itself this is not
+ * faster (one draw call per chunk instead of one total); its value is enabling
+ * per-chunk mesh rebuilds (block editing) and per-chunk frustum culling (step 4).
+ *
+ * @param map     The map to draw.
+ * @param camera  Active camera (unused for now; used by frustum culling later).
+ */
 static void drawChunked( Map *map, Camera3D *camera ) {
+    // identity transform: chunk meshes are already in world coordinates.
     Matrix transform = MatrixIdentity();
     for ( int c = 0; c < map->chunkCount; c++ ) {
         DrawMesh( map->chunks[c].mesh, map->material, transform );
