@@ -85,6 +85,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         cameraAngle -= 1.0f;
     }
 
+    gw->player->cameraAngle = cameraAngle;
     gw->player->input( gw->player );
     gw->player->update( gw->player, delta );
 

@@ -11,6 +11,7 @@ struct Player {
     Vector3 vel;
 
     float walkingSpeed;
+    float cameraAngle;
 
     Color color;
 
