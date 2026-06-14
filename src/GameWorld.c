@@ -18,7 +18,8 @@
 
 void updateCamera( Camera3D *camera, Player *player );
 float cameraOffsetY = 5.0f;
-float cameraOffsetZ = 10.0f;
+float cameraAngle = 90.0f;
+float cameraDistance = 10.0f;
 
 /**
  * @brief Creates a dinamically allocated GameWorld struct instance.
@@ -76,15 +77,23 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 
     }
 
+    if ( IsKeyDown( KEY_PAGE_UP ) ) {
+        cameraAngle += 1.0f;
+    }
+
+    if ( IsKeyDown( KEY_PAGE_DOWN ) ) {
+        cameraAngle -= 1.0f;
+    }
+
     gw->player->input( gw->player );
     gw->player->update( gw->player, delta );
 
     float w = GetMouseWheelMove();
     if ( w < 0 ) {
-        cameraOffsetZ += 0.2f;
+        cameraDistance += 0.2f;
         cameraOffsetY += 0.2f;
     } else if ( w > 0 ) {
-        cameraOffsetZ -= 0.2f;
+        cameraDistance -= 0.2f;
         cameraOffsetY -= 0.2f;
     }
 
@@ -111,7 +120,11 @@ void drawGameWorld( GameWorld *gw ) {
 
 void updateCamera( Camera3D *camera, Player *player ) {
 
-    camera->position = (Vector3) { player->pos.x, player->pos.y + cameraOffsetY, player->pos.z + cameraOffsetZ };
+    camera->position = (Vector3) { 
+        player->pos.x + cosf( cameraAngle * DEG2RAD ) * cameraDistance, 
+        player->pos.y + cameraOffsetY, 
+        player->pos.z + sinf( cameraAngle * DEG2RAD ) * cameraDistance, 
+    };
     camera->target = player->pos;
 
 }
