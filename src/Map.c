@@ -55,7 +55,7 @@ typedef enum {
 } MapStrategy;
 
 /** @brief Selected map build + render strategy (change here to switch). */
-static const MapStrategy buildStrategy = MAP_STRATEGY_CHUNKED;
+static const MapStrategy mapStrategy = MAP_STRATEGY_CHUNKED;
 
 /**
  * @brief Static description of one of the six faces of a cube.
@@ -167,15 +167,15 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
 
     // build geometry only for the selected strategy
     // (naive/culled draw from the block array directly and need no prebuild).
-    if ( buildStrategy == MAP_STRATEGY_MESH ) {
+    if ( mapStrategy == MAP_STRATEGY_MESH ) {
         buildMesh( new );      // needed by drawMesh    (one mesh for the whole world)
-    } else if ( buildStrategy == MAP_STRATEGY_CHUNKED ) {
+    } else if ( mapStrategy == MAP_STRATEGY_CHUNKED ) {
         buildChunks( new );    // needed by drawChunked (one mesh per chunk)
     }
 
     // select the draw function matching buildStrategy. All four produce the same
     // image but with very different performance (good for comparison):
-    switch ( buildStrategy ) {
+    switch ( mapStrategy ) {
         case MAP_STRATEGY_NAIVE:
             new->draw = drawNaive;    // (1) one cube per block, no culling   (slowest)
             break;
@@ -242,7 +242,7 @@ void breakBlock( Map *map, int la, int i, int j ) {
     map->blocks[p].broken = true;
 
     // 2) update the geometry for the active strategy.
-    switch ( buildStrategy ) {
+    switch ( mapStrategy ) {
 
         case MAP_STRATEGY_NAIVE:
         case MAP_STRATEGY_CULLED:
@@ -281,7 +281,7 @@ void breakBlock( Map *map, int la, int i, int j ) {
                 }
 
             }
-            
+
             break;
     }
 
