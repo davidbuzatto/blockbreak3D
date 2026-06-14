@@ -48,13 +48,14 @@
  * and process the map.
  */
 typedef enum {
-    BUILD_STRATEGY_NAIVE,   // block by block
-    BUILD_STRATEGY_CULLED,  // block by block with face culling
-    BUILD_STRATEGY_MESH,    // one mesh
-    BUILD_STRATEGY_CHUNKED  // mesh chunks
-} BuildStrategy;
+    MAP_STRATEGY_NAIVE,   // block by block
+    MAP_STRATEGY_CULLED,  // block by block with face culling
+    MAP_STRATEGY_MESH,    // one mesh
+    MAP_STRATEGY_CHUNKED  // mesh chunks
+} MapStrategy;
 
-const BuildStrategy buildStrategy = BUILD_STRATEGY_CHUNKED;
+/** @brief Selected map build + render strategy (change here to switch). */
+static const MapStrategy buildStrategy = MAP_STRATEGY_CHUNKED;
 
 /**
  * @brief Static description of one of the six faces of a cube.
@@ -162,27 +163,27 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     new->material = LoadMaterialDefault();
     new->material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
 
-    // build geometry for the mesh-based strategy you'll use; comment out the one
-    // you don't need to save build time/memory.
-    if ( buildStrategy == BUILD_STRATEGY_MESH ) {
+    // build geometry only for the selected strategy
+    // (naive/culled draw from the block array directly and need no prebuild).
+    if ( buildStrategy == MAP_STRATEGY_MESH ) {
         buildMesh( new );      // needed by drawMesh    (one mesh for the whole world)
-    } else if ( buildStrategy == BUILD_STRATEGY_CHUNKED ) {
+    } else if ( buildStrategy == MAP_STRATEGY_CHUNKED ) {
         buildChunks( new );    // needed by drawChunked (one mesh per chunk)
     }
 
-    // choose a rendering strategy by uncommenting exactly one. All four produce
-    // the same image but with very different performance (good for comparison):
+    // select the draw function matching buildStrategy. All four produce the same
+    // image but with very different performance (good for comparison):
     switch ( buildStrategy ) {
-        case BUILD_STRATEGY_NAIVE:
+        case MAP_STRATEGY_NAIVE:
             new->draw = drawNaive;    // (1) one cube per block, no culling   (slowest)
             break;
-        case BUILD_STRATEGY_CULLED:
+        case MAP_STRATEGY_CULLED:
             new->draw = drawCulled;   // (2) one cube per block, skip hidden  (faster)
             break;
-        case BUILD_STRATEGY_MESH:
+        case MAP_STRATEGY_MESH:
             new->draw = drawMesh;     // (3) single batched mesh              (fastest)
             break;
-        case BUILD_STRATEGY_CHUNKED:
+        case MAP_STRATEGY_CHUNKED:
             new->draw = drawChunked;    // (4) one mesh per chunk
             break;
     }    
