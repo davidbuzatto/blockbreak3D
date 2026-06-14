@@ -222,43 +222,68 @@ void destroyMap( Map *map ) {
 
 }
 
+/**
+ * @brief Breaks (removes) the block at grid coordinate (la, i, j), turning it
+ *        into air, and updates the rendered geometry incrementally.
+ *
+ * Cube-by-cube strategies read the block array live (nothing to rebuild); the
+ * single mesh must be fully rebuilt; the chunked strategy rebuilds only the
+ * affected chunk(s).
+ */
 void breakBlock( Map *map, int la, int i, int j ) {
 
+    // ignore out-of-bounds coordinates or cells that are already air.
     if ( !isSolid( map, la, i, j ) ) {
         return;
     }
 
-    // change data
+    // 1) change the data: the block becomes air.
     int p = la * ( map->rows * map->cols ) + i * map->cols + j;
     map->blocks[p].broken = true;
 
-    // update geometry
+    // 2) update the geometry for the active strategy.
     switch ( buildStrategy ) {
+
         case MAP_STRATEGY_NAIVE:
         case MAP_STRATEGY_CULLED:
+            // these read the block array every frame; nothing to rebuild.
             break;
+
         case MAP_STRATEGY_MESH:
+            // one giant mesh: the only option is to rebuild it whole (slow!).
             UnloadMesh( map->mesh );
             buildMesh( map );
             break;
-        case MAP_STRATEGY_CHUNKED:
-            rebuildChunk( map, chunkIndexAt( map, i, j ) );
-            int li = i % CHUNK_SIZE;
-            int lj = j % CHUNK_SIZE;
-            if ( li == 0 ) {
-                rebuildChunk( map, chunkIndexAt( map, i - 1, j ) );
+
+        case MAP_STRATEGY_CHUNKED: {
+
+                // always rebuild the chunk that owns this block.
+                rebuildChunk( map, chunkIndexAt( map, i, j ) );
+
+                // if the block sits on a chunk border, the neighbor chunk across
+                // that border also needs rebuilding (one of ITS blocks just got a
+                // newly exposed face). Only horizontal borders matter, because
+                // chunks span the full height.
+                int li = i % CHUNK_SIZE;   // local row inside the chunk
+                int lj = j % CHUNK_SIZE;   // local column inside the chunk
+
+                if ( li == 0 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i - 1, j ) );
+                }
+                if ( li == CHUNK_SIZE - 1 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i + 1, j ) );
+                }
+                if ( lj == 0 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i, j - 1 ) );
+                }
+                if ( lj == CHUNK_SIZE - 1 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i, j + 1 ) );
+                }
+
             }
-            if ( li == CHUNK_SIZE - 1 ) {
-                rebuildChunk( map, chunkIndexAt( map, i + 1, j ) );
-            }
-            if ( lj == 0 ) {
-                rebuildChunk( map, chunkIndexAt( map, i, j - 1 ) );
-            }
-            if ( lj == CHUNK_SIZE - 1 ) {
-                rebuildChunk( map, chunkIndexAt( map, i, j + 1 ) );
-            }
+            
             break;
-    } 
+    }
 
 }
 
@@ -572,27 +597,38 @@ static bool isBlockHidden( Map *map, int la, int i, int j ) {
            isSolid( map, la, i, j - 1 );     // left   (-X)
 }
 
+/**
+ * @brief Returns the index (in map->chunks) of the chunk that owns grid
+ *        column/row (i, j), or -1 if (i, j) is outside the world.
+ */
 static int chunkIndexAt( Map *map, int i, int j ) {
 
-    if ( i < 0 || i >= map->rows || j < 0 || j > map->cols ) {
+    // outside the world: there is no chunk.
+    if ( i < 0 || i >= map->rows || j < 0 || j >= map->cols ) {
         return -1;
     }
 
-    int ci = i / CHUNK_SIZE;
-    int cj = j / CHUNK_SIZE;
+    int ci = i / CHUNK_SIZE;   // which chunk row
+    int cj = j / CHUNK_SIZE;   // which chunk column
 
     return ci * map->chunkCountCols + cj;
 
 }
 
+/**
+ * @brief Rebuilds a single chunk's mesh from the current block data.
+ *
+ * Frees the old GPU mesh first. Safe to call with -1 (does nothing), so callers
+ * can pass the result of chunkIndexAt() without checking it first.
+ */
 static void rebuildChunk( Map *map, int chunkIndex ) {
 
     if ( chunkIndex < 0 ) {
-        return;
+        return;   // out-of-bounds neighbor: nothing to rebuild
     }
 
     Chunk *ch = &map->chunks[chunkIndex];
-    UnloadMesh( ch->mesh );
+    UnloadMesh( ch->mesh );   // release the old mesh
     ch->mesh = buildMeshRange( map, ch->i0, ch->j0, ch->rows, ch->cols );
 
 }

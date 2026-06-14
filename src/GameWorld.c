@@ -27,8 +27,8 @@ GameWorld *createGameWorld( void ) {
 
     GameWorld *gw = (GameWorld*) malloc( sizeof( GameWorld ) );
 
-    int rows = 10;
-    int cols = 10;
+    int rows = 60;
+    int cols = 60;
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
