@@ -46,6 +46,7 @@ GameWorld *createGameWorld( void ) {
 }
 
 void destroyGameWorld( GameWorld *gw ) {
+    destroyMap( gw->map );
     destroyPlayer( gw->player );
     free( gw );
 }
