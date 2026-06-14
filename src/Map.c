@@ -173,17 +173,17 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
         buildChunks( new );    // needed by drawChunked (one mesh per chunk)
     }
 
-    // select the draw function matching buildStrategy. All four produce the same
+    // select the draw function matching mapStrategy. All four produce the same
     // image but with very different performance (good for comparison):
     switch ( mapStrategy ) {
         case MAP_STRATEGY_NAIVE:
-            new->draw = drawNaive;    // (1) one cube per block, no culling   (slowest)
+            new->draw = drawNaive;      // (1) one cube per block, no culling   (slowest)
             break;
         case MAP_STRATEGY_CULLED:
-            new->draw = drawCulled;   // (2) one cube per block, skip hidden  (faster)
+            new->draw = drawCulled;     // (2) one cube per block, skip hidden  (faster)
             break;
         case MAP_STRATEGY_MESH:
-            new->draw = drawMesh;     // (3) single batched mesh              (fastest)
+            new->draw = drawMesh;       // (3) single batched mesh              (fastest)
             break;
         case MAP_STRATEGY_CHUNKED:
             new->draw = drawChunked;    // (4) one mesh per chunk
