@@ -52,7 +52,7 @@ void destroyGameWorld( GameWorld *gw ) {
 
 void updateGameWorld( GameWorld *gw, float delta ) {
 
-    // breakBlock test (break blocks that are in the player column)
+    // breakBlock test (break blocks that are below the player)
     if ( IsKeyDown( KEY_SPACE ) ) {
 
         Map *map = gw->map;
@@ -80,9 +80,18 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     if ( IsKeyDown( KEY_PAGE_UP ) ) {
         cameraAngle += 1.0f;
     }
-
     if ( IsKeyDown( KEY_PAGE_DOWN ) ) {
         cameraAngle -= 1.0f;
+    }
+
+    if ( IsKeyDown( KEY_HOME ) ) {
+        cameraOffsetY += 0.2f;
+    }
+    if ( IsKeyDown( KEY_END ) ) {
+        cameraOffsetY -= 0.2f;
+        if ( cameraOffsetY < 0.0f ) {
+            cameraOffsetY = 0.0f;
+        }
     }
 
     gw->player->cameraAngle = cameraAngle;
@@ -92,10 +101,8 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     float w = GetMouseWheelMove();
     if ( w < 0 ) {
         cameraDistance += 0.2f;
-        cameraOffsetY += 0.2f;
     } else if ( w > 0 ) {
         cameraDistance -= 0.2f;
-        cameraOffsetY -= 0.2f;
     }
 
     updateCamera( &gw->camera, gw->player );
@@ -126,6 +133,7 @@ void updateCamera( Camera3D *camera, Player *player ) {
         player->pos.y + cameraOffsetY, 
         player->pos.z + sinf( cameraAngle * DEG2RAD ) * cameraDistance, 
     };
+
     camera->target = player->pos;
 
 }

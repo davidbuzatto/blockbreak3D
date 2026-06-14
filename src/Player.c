@@ -43,8 +43,10 @@ static void input( Player *player ) {
     // raw movement intent from the keys, in camera-relative axes:
     //     strafe = sideways
     //     forward = toward where the camera looks
-    int strafe  = ( IsKeyDown( KEY_LEFT ) ? -1 : 0 ) + ( IsKeyDown( KEY_RIGHT ) ? 1 : 0 );
-    int forward = ( IsKeyDown( KEY_DOWN ) ? -1 : 0 ) + ( IsKeyDown( KEY_UP ) ? 1 : 0 );
+    //     vertical = up and down
+    int strafe   = ( IsKeyDown( KEY_LEFT ) ? -1 : 0 ) + ( IsKeyDown( KEY_RIGHT ) ? 1 : 0 );
+    int forward  = ( IsKeyDown( KEY_DOWN ) ? -1 : 0 ) + ( IsKeyDown( KEY_UP ) ? 1 : 0 );
+    int vertical = ( IsKeyDown( KEY_DELETE ) ? -1 : 0 ) + ( IsKeyDown( KEY_INSERT ) ? 1 : 0 );
 
     // build the camera-relative basis on the XZ plane from the camera angle.
     float a = player->cameraAngle * DEG2RAD;
@@ -64,12 +66,14 @@ static void input( Player *player ) {
     }
 
     player->vel.x = move.x * player->walkingSpeed;
+    player->vel.y = vertical * player->walkingSpeed;
     player->vel.z = move.z * player->walkingSpeed;
 
 }
 
 static void update( Player *player, float delta ) {
     player->pos.x += player->vel.x * delta;
+    player->pos.y += player->vel.y * delta;
     player->pos.z += player->vel.z * delta;
 }
 
