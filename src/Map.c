@@ -48,14 +48,15 @@
  * and process the map.
  */
 typedef enum {
-    MAP_STRATEGY_NAIVE,   // block by block
-    MAP_STRATEGY_CULLED,  // block by block with face culling
-    MAP_STRATEGY_MESH,    // one mesh
-    MAP_STRATEGY_CHUNKED  // mesh chunks
+    MAP_STRATEGY_NAIVE,           // block by block
+    MAP_STRATEGY_CULLED,          // block by block with face culling
+    MAP_STRATEGY_MESH,            // one mesh
+    MAP_STRATEGY_CHUNKED,          // mesh chunks
+    MAP_STRATEGY_CHUNKED_FRUSTUM  // mesh chunks + frustum culling
 } MapStrategy;
 
 /** @brief Selected map build + render strategy (change here to switch). */
-static const MapStrategy mapStrategy = MAP_STRATEGY_CHUNKED;
+static const MapStrategy mapStrategy = MAP_STRATEGY_CHUNKED_FRUSTUM;
 
 /**
  * @brief Static description of one of the six faces of a cube.
@@ -104,6 +105,15 @@ static const CubeFace cubeFaces[6] = {
     {  0, -1,  0, { {-1,-1,-1}, {-1,1,-1}, {1,1,-1}, {1,-1,-1} }, 0.6f },
 };
 
+/**
+ * @brief The camera's view volume as 6 planes (left, right, bottom, top, near,
+ *        far). Each plane is a Vector4: (x,y,z) is the normal (a,b,c) and w is
+ *        d. A point is inside a plane when a*x + b*y + c*z + d >= 0.
+ */
+typedef struct {
+    Vector4 planes[6];
+} Frustum;
+
 /* forward declarations of file-private (static) helpers. */
 static void fillMap( Map *map, float scale, float seed );
 static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols );
@@ -113,12 +123,16 @@ static bool isSolid( Map *map, int la, int i, int j );
 static bool isBlockHidden( Map *map, int la, int i, int j );
 static int chunkIndexAt( Map *map, int i, int j );
 static void rebuildChunk( Map *map, int chunkIndex );
+static Frustum extractFrustum( Camera3D *camera );
+static bool boxInFrustum( Frustum *f, Vector3 min, Vector3 max );
+static void chunkBounds( Map *map, Chunk *ch, Vector3 *min, Vector3 *max );
 
-/* four interchangeable rendering strategies; pick one in createMap(). */
+/* five interchangeable rendering strategies; pick one in createMap(). */
 static void drawNaive( Map *map, Camera3D *camera );
 static void drawCulled( Map *map, Camera3D *camera );
 static void drawMesh( Map *map, Camera3D *camera );
 static void drawChunked( Map *map, Camera3D *camera );
+static void drawChunkedFrustum( Map *map, Camera3D *camera );
 
 /* helper shared by the cube-by-cube strategies (drawNaive / drawCulled). */
 static void drawBlock( Block *block );
@@ -169,27 +183,30 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     // (naive/culled draw from the block array directly and need no prebuild).
     if ( mapStrategy == MAP_STRATEGY_MESH ) {
         buildMesh( new );      // needed by drawMesh    (one mesh for the whole world)
-    } else if ( mapStrategy == MAP_STRATEGY_CHUNKED ) {
-        buildChunks( new );    // needed by drawChunked (one mesh per chunk)
+    } else if ( mapStrategy == MAP_STRATEGY_CHUNKED || mapStrategy == MAP_STRATEGY_CHUNKED_FRUSTUM ) {
+        buildChunks( new );    // needed by drawChunked and drawChunkedFrustum (one mesh per chunk)
     }
 
-    // select the draw function matching mapStrategy. All four produce the same
+    // select the draw function matching mapStrategy. All five produce the same
     // image but with very different performance (good for comparison):
     switch ( mapStrategy ) {
         case MAP_STRATEGY_NAIVE:
-            new->draw = drawNaive;      // (1) one cube per block, no culling   (slowest)
+            new->draw = drawNaive;             // (1) one cube per block, no culling   (slowest)
             break;
         case MAP_STRATEGY_CULLED:
-            new->draw = drawCulled;     // (2) one cube per block, skip hidden  (faster)
+            new->draw = drawCulled;            // (2) one cube per block, skip hidden  (faster)
             break;
         case MAP_STRATEGY_MESH:
-            new->draw = drawMesh;       // (3) single batched mesh              (fastest)
+            new->draw = drawMesh;              // (3) single batched mesh              (fastest)
             break;
         case MAP_STRATEGY_CHUNKED:
-            new->draw = drawChunked;    // (4) one mesh per chunk
+            new->draw = drawChunked;           // (4) one mesh per chunk
+            break;
+        case MAP_STRATEGY_CHUNKED_FRUSTUM:
+            new->draw = drawChunkedFrustum;    // (5) one mesh per chunk with frustum culling
             break;
         default:
-            new->draw = drawChunked;    // fails on purpose
+            new->draw = drawChunkedFrustum;    // fallback for an unhandled strategy
             break;
     }    
 
@@ -255,7 +272,8 @@ void breakBlock( Map *map, int la, int i, int j ) {
             buildMesh( map );
             break;
 
-        case MAP_STRATEGY_CHUNKED: {
+        case MAP_STRATEGY_CHUNKED:
+        case MAP_STRATEGY_CHUNKED_FRUSTUM: {
 
                 // always rebuild the chunk that owns this block.
                 rebuildChunk( map, chunkIndexAt( map, i, j ) );
@@ -634,6 +652,90 @@ static void rebuildChunk( Map *map, int chunkIndex ) {
 }
 
 /**
+ * @brief Builds the 6 frustum planes from the camera's view-projection matrix
+ *        (Gribb-Hartmann extraction).
+ *
+ * The planes are NOT normalized: the box test only needs the sign of the
+ * plane equation, and normalizing would not change it.
+ */
+static Frustum extractFrustum( Camera3D *camera ) {
+
+    // view-projection matrix: world space -> clip space.
+    float aspect = (float) GetScreenWidth() / (float) GetScreenHeight();
+    Matrix view = GetCameraMatrix( *camera );
+    Matrix proj = MatrixPerspective( camera->fovy * DEG2RAD, aspect, 0.01, 1000.0 );
+    Matrix m = MatrixMultiply( view, proj );
+
+    Frustum f;
+
+    // each plane = a combination of rows of the clip matrix
+    f.planes[0] = (Vector4) { m.m3 + m.m0, m.m7 + m.m4, m.m11 + m.m8,  m.m15 + m.m12 }; // left
+    f.planes[1] = (Vector4) { m.m3 - m.m0, m.m7 - m.m4, m.m11 - m.m8,  m.m15 - m.m12 }; // right
+    f.planes[2] = (Vector4) { m.m3 + m.m1, m.m7 + m.m5, m.m11 + m.m9,  m.m15 + m.m13 }; // bottom
+    f.planes[3] = (Vector4) { m.m3 - m.m1, m.m7 - m.m5, m.m11 - m.m9,  m.m15 - m.m13 }; // top
+    f.planes[4] = (Vector4) { m.m3 + m.m2, m.m7 + m.m6, m.m11 + m.m10, m.m15 + m.m14 }; // near
+    f.planes[5] = (Vector4) { m.m3 - m.m2, m.m7 - m.m6, m.m11 - m.m10, m.m15 - m.m14 }; // far
+
+    return f;
+
+}
+
+/**
+ * @brief Returns true if the axis-aligned box [min, max] is at least partially
+ *        inside the frustum (false = fully outside, so the chunk can be skipped).
+ *
+ * Uses the "positive vertex" test: for each plane, only the box corner furthest
+ * along the plane's normal is checked. If even that corner is outside, the whole
+ * box is outside.
+ */
+static bool boxInFrustum( Frustum *f, Vector3 min, Vector3 max ) {
+
+    for ( int p = 0; p < 6; p++ ) {
+
+        Vector4 pl = f->planes[p];
+
+        // "positive vertex": the box corner furthest along this plane's normal.
+        float px = ( pl.x >= 0.0f ) ? max.x : min.x;
+        float py = ( pl.y >= 0.0f ) ? max.y : min.y;
+        float pz = ( pl.z >= 0.0f ) ? max.z : min.z;
+
+        // if even that corner is behind the plane, the whole box is outside.
+        if ( pl.x * px + pl.y * py + pl.z * pz + pl.w < 0.0f ) {
+            return false;
+        }
+
+    }
+
+    return true; // not fully outside any plane
+
+}
+
+/**
+ * @brief Computes the world-space axis-aligned bounding box (AABB) of a chunk:
+ *        its X/Z grid range and the full vertical height.
+ *
+ * Block positions are CENTERS, so we extend half a block (hs) past the first
+ * and last block on each axis to cover their full extent.
+ */
+static void chunkBounds( Map *map, Chunk *ch, Vector3 *min, Vector3 *max ) {
+
+    float hs = map->blockSize / 2.0f;   // half a block
+
+    // X spans the chunk's columns (j0 .. j0 + cols - 1).
+    min->x = map->pos.x + map->blockSize * ch->j0 - hs;
+    max->x = map->pos.x + map->blockSize * ( ch->j0 + ch->cols - 1 ) + hs;
+
+    // Z spans the chunk's rows (i0 .. i0 + rows - 1).
+    min->z = map->pos.z + map->blockSize * ch->i0 - hs;
+    max->z = map->pos.z + map->blockSize * ( ch->i0 + ch->rows - 1 ) + hs;
+
+    // Y spans the full world height (chunks are full-height).
+    min->y = map->pos.y - hs;
+    max->y = map->pos.y + map->blockSize * ( map->layers - 1 ) + hs;
+
+}
+
+/**
  * @brief Rendering strategy 1: draw every solid block as its own cube, with no
  *        culling at all.
  *
@@ -702,18 +804,6 @@ static void drawCulled( Map *map, Camera3D *camera ) {
 }
 
 /**
- * @brief Draws a single block as a solid cube with a black wireframe outline.
- *
- * Used by the cube-by-cube strategies (drawNaive / drawCulled).
- *
- * @param block The block to draw.
- */
-static void drawBlock( Block *block ) {
-    DrawCubeV( block->pos, block->dim, block->color );
-    DrawCubeWiresV( block->pos, block->dim, BLACK );
-}
-
-/**
  * @brief Rendering strategy 3: draw the whole map with a single draw call using
  *        the pre-built batched mesh.
  *
@@ -744,4 +834,48 @@ static void drawChunked( Map *map, Camera3D *camera ) {
     for ( int c = 0; c < map->chunkCount; c++ ) {
         DrawMesh( map->chunks[c].mesh, map->material, transform );
     }
+}
+
+/**
+ * @brief Rendering strategy 5: chunked meshes, skipping chunks whose bounding
+ *        box falls entirely outside the camera frustum (frustum culling).
+ *
+ * @param map     The map to draw.
+ * @param camera  Active camera; defines the frustum used for culling.
+ */
+static void drawChunkedFrustum( Map *map, Camera3D *camera ) {
+
+    Frustum frustum = extractFrustum( camera );
+    Matrix transform = MatrixIdentity();
+
+    //int drawnChunks = 0;
+
+    for ( int c = 0; c < map->chunkCount; c++ ) {
+        
+        Chunk *ch = &map->chunks[c];
+        Vector3 min;
+        Vector3 max;
+        chunkBounds( map, ch, &min, &max );
+
+        if ( boxInFrustum( &frustum, min, max ) ) {
+            DrawMesh( ch->mesh, map->material, transform );
+            //drawnChunks++;
+        }
+
+    }
+
+    //trace( "%d", drawnChunks );
+
+}
+
+/**
+ * @brief Draws a single block as a solid cube with a black wireframe outline.
+ *
+ * Used by the cube-by-cube strategies (drawNaive / drawCulled).
+ *
+ * @param block The block to draw.
+ */
+static void drawBlock( Block *block ) {
+    DrawCubeV( block->pos, block->dim, block->color );
+    DrawCubeWiresV( block->pos, block->dim, BLACK );
 }
