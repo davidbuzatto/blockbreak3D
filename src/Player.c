@@ -15,10 +15,12 @@
 
 #include "Map.h"
 #include "Player.h"
+#include "ResourceManager.h"
 
 static const float GRAVITY = -25.0f;            // downward acceleration (units/s^2)
 static const float TERMINAL_VELOCITY = -50.0f;  // maximum fall speed (clamp)
 static const float JUMP_SPEED = 9.0f;           // initial upward velocity of a jump
+static const float MODEL_FACING_OFFSET = 0.0f;
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -43,6 +45,7 @@ Player *createPlayer( float x, float y, float z, float size, Color color ) {
 
     new->walkingSpeed = 5.0f;
     new->cameraAngle = 0.0f;
+    new->facingAngle = 0.0f;
 
     new->map = NULL;
     new->onGround = false;
@@ -75,8 +78,8 @@ static void input( Player *player ) {
     // raw movement intent from the keys, in camera-relative axes:
     //     strafe  = sideways
     //     forward = toward where the camera looks
-    int strafe   = ( IsKeyDown( KEY_LEFT ) ? -1 : 0 ) + ( IsKeyDown( KEY_RIGHT ) ? 1 : 0 );
-    int forward  = ( IsKeyDown( KEY_DOWN ) ? -1 : 0 ) + ( IsKeyDown( KEY_UP ) ? 1 : 0 );
+    int strafe   = ( IsKeyDown( KEY_A ) ? -1 : 0 ) + ( IsKeyDown( KEY_D ) ? 1 : 0 );
+    int forward  = ( IsKeyDown( KEY_S ) ? -1 : 0 ) + ( IsKeyDown( KEY_W ) ? 1 : 0 );
 
     // build the camera-relative basis on the XZ plane from the camera angle.
     float a = player->cameraAngle * DEG2RAD;
@@ -134,6 +137,10 @@ static void update( Player *player, float delta ) {
         player->pos.z -= dz;
     }
 
+    if ( player->vel.x != 0.0f || player->vel.z != 0.0f ) {
+        player->facingAngle = atan2f( player->vel.x, player->vel.z ) * RAD2DEG;
+    }
+
     // --- gravity: accelerate the fall each frame, capped at terminal velocity ---
     player->vel.y += GRAVITY * delta;
     if ( player->vel.y < TERMINAL_VELOCITY ) {
@@ -175,6 +182,23 @@ static void update( Player *player, float delta ) {
  * @brief Draws the player as a solid cube with a black wireframe outline.
  */
 static void draw( Player *player ) {
-    DrawCubeV( player->pos, player->dim, player->color );
+
+    Vector3 feet = {
+        player->pos.x,
+        player->pos.y - player->dim.y * 0.5f,
+        player->pos.z
+    };
+
+    DrawModelEx(
+        rm.playerModel,
+        feet,
+        (Vector3) { 0.0f, 1.0f, 0.0f },
+        player->facingAngle + MODEL_FACING_OFFSET,
+        (Vector3) { 1.0f, 1.0f, 1.0f },
+        WHITE
+    );
+
+    //DrawCubeV( player->pos, player->dim, player->color );
     DrawCubeWiresV( player->pos, player->dim, BLACK );
+
 }

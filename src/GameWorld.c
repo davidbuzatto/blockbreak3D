@@ -46,6 +46,10 @@ GameWorld *createGameWorld( void ) {
     gw->player = createPlayer( 0, 30, 0, 1, BLUE );   // spawn high so it falls onto the terrain
     gw->player->map = gw->map;                        // give the player the world to collide against
 
+    // initial facing angle
+    float a = cameraYaw * DEG2RAD;
+    gw->player->facingAngle = atan2f( -cosf( a ), -sinf( a ) ) * RAD2DEG;
+
     gw->camera.position = (Vector3) { 0.0f, 0.0f, 0.0f };
     gw->camera.target = gw->player->pos;
     gw->camera.up = (Vector3) { 0.0f, 1.0f, 0.0f };
@@ -102,18 +106,18 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     // --- orbit camera controls (keyboard) ---
 
     // yaw: orbit left / right
-    if ( IsKeyDown( KEY_A ) ) {
+    if ( IsKeyDown( KEY_RIGHT ) ) {
         cameraYaw += CAMERA_YAW_SPEED * delta;
     }
-    if ( IsKeyDown( KEY_D ) ) {
+    if ( IsKeyDown( KEY_LEFT ) ) {
         cameraYaw -= CAMERA_YAW_SPEED * delta;
     }
 
     // pitch: orbit up / down, clamped so the camera never flips or goes underground
-    if ( IsKeyDown( KEY_W ) ) {
+    if ( IsKeyDown( KEY_UP ) ) {
         cameraPitch += CAMERA_PITCH_SPEED * delta;
     }
-    if ( IsKeyDown( KEY_S ) ) {
+    if ( IsKeyDown( KEY_DOWN ) ) {
         cameraPitch -= CAMERA_PITCH_SPEED * delta;
     }
     cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
@@ -139,7 +143,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 void drawGameWorld( GameWorld *gw ) {
 
     BeginDrawing();
-    ClearBackground( WHITE );
+    ClearBackground( SKYBLUE );
 
     BeginMode3D( gw->camera );
     gw->map->draw( gw->map, &gw->camera );
