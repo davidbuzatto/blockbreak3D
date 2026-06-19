@@ -306,13 +306,25 @@ void breakBlock( Map *map, int la, int i, int j ) {
 
 }
 
+/**
+ * @brief Returns true if an axis-aligned box overlaps any solid block.
+ *
+ * Converts the box (center +/- half size) into the range of grid cells it can
+ * touch and asks isSolid() about each one. isSolid treats out-of-bounds cells
+ * as air, so no clamping is needed. Used for player collision.
+ *
+ * @param map     The map.
+ * @param center  World-space center of the box.
+ * @param size    Full extents of the box (width, height, depth).
+ * @return true if any overlapped cell holds a solid block.
+ */
 bool mapBoxCollides( Map *map, Vector3 center, Vector3 size ) {
 
     float hx = size.x * 0.5f;
     float hy = size.y * 0.5f;
     float hz = size.z * 0.5f;
 
-    // AABB
+    // world-space AABB of the box.
     float minX = center.x - hx;
     float maxX = center.x + hx;
     float minY = center.y - hy;
@@ -320,6 +332,8 @@ bool mapBoxCollides( Map *map, Vector3 center, Vector3 size ) {
     float minZ = center.z - hz;
     float maxZ = center.z + hz;
 
+    // range of grid cells the box spans. The cell index of a world coordinate c
+    // is round((c - origin)/blockSize), and round(x) == floor(x + 0.5).
     int jmin  = (int) floorf( ( minX - map->pos.x ) / map->blockSize + 0.5f );
     int jmax  = (int) floorf( ( maxX - map->pos.x ) / map->blockSize + 0.5f );
     int lamin = (int) floorf( ( minY - map->pos.y ) / map->blockSize + 0.5f );
@@ -327,6 +341,7 @@ bool mapBoxCollides( Map *map, Vector3 center, Vector3 size ) {
     int imin  = (int) floorf( ( minZ - map->pos.z ) / map->blockSize + 0.5f );
     int imax  = (int) floorf( ( maxZ - map->pos.z ) / map->blockSize + 0.5f );
 
+    // any solid cell in that range means a collision.
     for ( int la = lamin; la <= lamax; la++ ) {
         for ( int i = imin; i <= imax; i++ ) {
             for ( int j = jmin; j <= jmax; j++ ) {

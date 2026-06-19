@@ -1,3 +1,11 @@
+/**
+ * @file Player.c
+ * @author Prof. Dr. David Buzatto
+ * @brief Player implementation: camera-relative movement, gravity, jumping and
+ *        AABB collision against the voxel map.
+ *
+ * @copyright Copyright (c) 2026
+ */
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
@@ -8,14 +16,23 @@
 #include "Map.h"
 #include "Player.h"
 
-static const float GRAVITY = -25.0f;           // world units / s^2
-static const float TERMINAL_VELOCITY = -50.0f;
-static const float JUMP_SPEED = 9.0f;
+static const float GRAVITY = -25.0f;            // downward acceleration (units/s^2)
+static const float TERMINAL_VELOCITY = -50.0f;  // maximum fall speed (clamp)
+static const float JUMP_SPEED = 9.0f;           // initial upward velocity of a jump
 
 static void input( Player *player );
 static void update( Player *player, float delta );
 static void draw( Player *player );
 
+/**
+ * @brief Creates a dynamically allocated Player.
+ *
+ * @param x,y,z   Initial world-space position (cube center).
+ * @param size    Edge length of the player's cube.
+ * @param color   Cube color.
+ * @return Player* The new player. Its map pointer starts NULL and must be set by
+ *                 the caller (GameWorld) before update() runs.
+ */
 Player *createPlayer( float x, float y, float z, float size, Color color ) {
 
     Player *new = (Player*) malloc( sizeof( Player ) );
@@ -40,18 +57,24 @@ Player *createPlayer( float x, float y, float z, float size, Color color ) {
 
 }
 
+/**
+ * @brief Frees a Player. Safe to call with NULL.
+ */
 void destroyPlayer( Player *player ) {
     if ( player != NULL ) {
         free( player );
     }
 }
 
+/**
+ * @brief Reads input: sets horizontal velocity (camera-relative) and triggers a
+ *        jump. Vertical velocity is otherwise controlled by gravity in update().
+ */
 static void input( Player *player ) {
     
     // raw movement intent from the keys, in camera-relative axes:
-    //     strafe = sideways
+    //     strafe  = sideways
     //     forward = toward where the camera looks
-    //     vertical = up and down
     int strafe   = ( IsKeyDown( KEY_LEFT ) ? -1 : 0 ) + ( IsKeyDown( KEY_RIGHT ) ? 1 : 0 );
     int forward  = ( IsKeyDown( KEY_DOWN ) ? -1 : 0 ) + ( IsKeyDown( KEY_UP ) ? 1 : 0 );
 
@@ -75,6 +98,8 @@ static void input( Player *player ) {
     player->vel.x = move.x * player->walkingSpeed;
     player->vel.z = move.z * player->walkingSpeed;
 
+    // jump: only when on the ground and only on the key press (not while held),
+    // otherwise it would re-jump every frame.
     if ( player->onGround && IsKeyPressed( KEY_SPACE ) ) {
         player->vel.y = JUMP_SPEED;
         player->onGround = false;
@@ -82,33 +107,50 @@ static void input( Player *player ) {
 
 }
 
+/**
+ * @brief Advances the player's physics for one frame: horizontal movement with
+ *        wall collision, gravity, and vertical movement with ground/ceiling
+ *        collision.
+ *
+ * Movement is resolved one axis at a time (move, then undo that axis if it
+ * caused an overlap), which lets the player slide along walls instead of
+ * sticking to them.
+ */
 static void update( Player *player, float delta ) {
 
+    // --- horizontal movement, one axis at a time so we can slide along walls ---
+
+    // X axis: move, then undo only X if it put us inside a block.
     float dx = player->vel.x * delta;
     player->pos.x += dx;
     if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
         player->pos.x -= dx;
     }
 
+    // Z axis: same idea, independent of X.
     float dz = player->vel.z * delta;
     player->pos.z += dz;
     if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
         player->pos.z -= dz;
     }
 
+    // --- gravity: accelerate the fall each frame, capped at terminal velocity ---
     player->vel.y += GRAVITY * delta;
     if ( player->vel.y < TERMINAL_VELOCITY ) {
         player->vel.y = TERMINAL_VELOCITY;
     }
 
+    // --- vertical movement + ground/ceiling collision ---
     float dy = player->vel.y * delta;
     player->pos.y += dy;
 
     if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
 
-        // falling
         if ( dy <= 0.0f ) {
 
+            // falling: snap the feet onto the top of the block below, so the
+            // player rests exactly on the surface (no hovering/jitter) and
+            // onGround stays stable (which the jump relies on).
             float feetY = player->pos.y - player->dim.y * 0.5f;
             int la = (int) floorf( ( feetY - player->map->pos.y ) / player->map->blockSize + 0.5f );
             float blockTop = player->map->pos.y + player->map->blockSize * la + player->map->blockSize * 0.5f;
@@ -116,17 +158,22 @@ static void update( Player *player, float delta ) {
             player->onGround = true;
 
         } else {
+            // rising into a ceiling: just cancel the upward step.
             player->pos.y -= dy;
         }
 
         player->vel.y = 0.0f;
 
     } else {
+        // nothing under (or above) us: airborne.
         player->onGround = false;
     }
 
 }
 
+/**
+ * @brief Draws the player as a solid cube with a black wireframe outline.
+ */
 static void draw( Player *player ) {
     DrawCubeV( player->pos, player->dim, player->color );
     DrawCubeWiresV( player->pos, player->dim, BLACK );
