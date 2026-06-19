@@ -23,6 +23,7 @@ struct Player {
     float walkingSpeed;     // horizontal movement speed (units/s).
     float cameraAngle;      // camera orbit angle (deg), set by GameWorld each frame.
     float facingAngle;      // direction the model faces (deg), follows movement.
+    float modelScale;       // uniform scale to fit the model to the collision box.
 
     Map *map;               // world the player moves and collides against.
     bool onGround;          // true when standing on a solid block (enables jump).
@@ -38,7 +39,7 @@ struct Player {
 /**
  * @brief Creates a player. See createPlayer in Player.c for parameter details.
  */
-Player *createPlayer( float x, float y, float z, float size, Color color );
+Player *createPlayer( float x, float y, float z, float width, float height, Color color );
 
 /**
  * @brief Frees a player. Safe to call with NULL.

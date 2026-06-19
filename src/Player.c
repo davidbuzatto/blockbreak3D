@@ -29,23 +29,31 @@ static void draw( Player *player );
 /**
  * @brief Creates a dynamically allocated Player.
  *
- * @param x,y,z   Initial world-space position (cube center).
- * @param size    Edge length of the player's cube.
- * @param color   Cube color.
+ * @param x,y,z    Initial world-space position (collision box center).
+ * @param width    Collision box width and depth (X/Z footprint).
+ * @param height   Collision box height (Y).
+ * @param color    Debug color (used only by the optional debug cube).
  * @return Player* The new player. Its map pointer starts NULL and must be set by
  *                 the caller (GameWorld) before update() runs.
  */
-Player *createPlayer( float x, float y, float z, float size, Color color ) {
+Player *createPlayer( float x, float y, float z, float width, float height, Color color ) {
 
     Player *new = (Player*) malloc( sizeof( Player ) );
 
     new->pos = (Vector3) { x, y, z };
-    new->dim = (Vector3) { size, size, size };
+    new->dim = (Vector3) { width, height, width };   // collision box: square footprint, given height
     new->vel = (Vector3) { 0 };
 
     new->walkingSpeed = 5.0f;
     new->cameraAngle = 0.0f;
     new->facingAngle = 0.0f;
+
+    // scale the model uniformly so its height matches the collision box height.
+    // GetModelBoundingBox gives the model's real size in its own units; dividing
+    // the wanted height by it gives the factor (so changing dim.y rescales the model).
+    BoundingBox bb = GetModelBoundingBox( rm.playerModel );
+    float modelHeight = bb.max.y - bb.min.y;
+    new->modelScale = new->dim.y / modelHeight;
 
     new->map = NULL;
     new->onGround = false;
@@ -199,7 +207,11 @@ static void draw( Player *player ) {
         feet,
         (Vector3) { 0.0f, 1.0f, 0.0f },                 // rotate around the Y axis
         player->facingAngle + MODEL_FACING_OFFSET,      // face the movement direction
-        (Vector3) { 1.0f, 1.0f, 1.0f },                 // scale
+        (Vector3) {                                     // scale
+            player->modelScale, 
+            player->modelScale, 
+            player->modelScale
+        },
         WHITE                                           // tint (WHITE keeps texture colors)
     );
 
