@@ -20,7 +20,7 @@
 static const float GRAVITY = -25.0f;            // downward acceleration (units/s^2)
 static const float TERMINAL_VELOCITY = -50.0f;  // maximum fall speed (clamp)
 static const float JUMP_SPEED = 9.0f;           // initial upward velocity of a jump
-static const float MODEL_FACING_OFFSET = 0.0f;
+static const float MODEL_FACING_OFFSET = 0.0f;  // corrects the model's default facing
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -137,6 +137,8 @@ static void update( Player *player, float delta ) {
         player->pos.z -= dz;
     }
 
+    // face the direction of horizontal movement (keep the last facing when idle).
+    // atan2(x, z) measures the angle from +Z, matching the Y rotation used to draw.
     if ( player->vel.x != 0.0f || player->vel.z != 0.0f ) {
         player->facingAngle = atan2f( player->vel.x, player->vel.z ) * RAD2DEG;
     }
@@ -179,10 +181,13 @@ static void update( Player *player, float delta ) {
 }
 
 /**
- * @brief Draws the player as a solid cube with a black wireframe outline.
+ * @brief Draws the player's 3D model at its feet, rotated to face its movement
+ *        direction. The wireframe box shows the collision AABB (debug).
  */
 static void draw( Player *player ) {
 
+    // the model's origin is at its feet, but player->pos is the box CENTER,
+    // so lower the draw position by half the height.
     Vector3 feet = {
         player->pos.x,
         player->pos.y - player->dim.y * 0.5f,
@@ -192,12 +197,13 @@ static void draw( Player *player ) {
     DrawModelEx(
         rm.playerModel,
         feet,
-        (Vector3) { 0.0f, 1.0f, 0.0f },
-        player->facingAngle + MODEL_FACING_OFFSET,
-        (Vector3) { 1.0f, 1.0f, 1.0f },
-        WHITE
+        (Vector3) { 0.0f, 1.0f, 0.0f },                 // rotate around the Y axis
+        player->facingAngle + MODEL_FACING_OFFSET,      // face the movement direction
+        (Vector3) { 1.0f, 1.0f, 1.0f },                 // scale
+        WHITE                                           // tint (WHITE keeps texture colors)
     );
 
+    // debug: the collision box (player->dim) drawn around the model.
     //DrawCubeV( player->pos, player->dim, player->color );
     DrawCubeWiresV( player->pos, player->dim, BLACK );
 

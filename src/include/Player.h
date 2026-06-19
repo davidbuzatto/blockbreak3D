@@ -22,7 +22,7 @@ struct Player {
 
     float walkingSpeed;     // horizontal movement speed (units/s).
     float cameraAngle;      // camera orbit angle (deg), set by GameWorld each frame.
-    float facingAngle;
+    float facingAngle;      // direction the model faces (deg), follows movement.
 
     Map *map;               // world the player moves and collides against.
     bool onGround;          // true when standing on a solid block (enables jump).

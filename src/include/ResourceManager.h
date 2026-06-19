@@ -10,7 +10,7 @@
 #include "raylib/raylib.h"
 
 typedef struct ResourceManager {
-    Model playerModel;
+    Model playerModel;      // the player's 3D model (character-k.glb)
 } ResourceManager;
 
 /**

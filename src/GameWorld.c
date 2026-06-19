@@ -38,15 +38,17 @@ GameWorld *createGameWorld( void ) {
 
     GameWorld *gw = (GameWorld*) malloc( sizeof( GameWorld ) );
 
-    int rows = 60;
-    int cols = 60;
+    int rows = 1000;
+    int cols = 1000;
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
     gw->player = createPlayer( 0, 30, 0, 1, BLUE );   // spawn high so it falls onto the terrain
     gw->player->map = gw->map;                        // give the player the world to collide against
 
-    // initial facing angle
+    // start the model facing "forward" (away from the camera) instead of looking
+    // at it: feed the camera-relative forward vector into the same atan2 the
+    // player uses to face its movement.
     float a = cameraYaw * DEG2RAD;
     gw->player->facingAngle = atan2f( -cosf( a ), -sinf( a ) ) * RAD2DEG;
 
