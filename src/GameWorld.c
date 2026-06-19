@@ -17,10 +17,18 @@
 #include "Player.h"
 
 void updateCamera( Camera3D *camera, Player *player );
-float cameraOffsetY = 5.0f;
-float cameraHorAngle = 90.0f;
-float cameraVerAngle = 90.0f;
-float cameraDistance = 10.0f;
+
+float cameraYaw = 90.0f;        // horizontal angle
+float cameraPitch = 30.0f;      // vertical angle
+float cameraDistance = 10.0f;   // orbit radius
+
+static const float CAMERA_YAW_SPEED = 90.0f;
+static const float CAMERA_PITCH_SPEED = 90.0f;
+static const float CAMERA_PITCH_MIN = 5.0f;
+static const float CAMERA_PITCH_MAX = 85.0f;
+static const float CAMERA_ZOOM_STEP = 1.0f;
+static const float CAMERA_DISTANCE_MIN = 3.0f;
+static const float CAMERA_DISTANCE_MAX = 40.0f;
 
 /**
  * @brief Creates a dinamically allocated GameWorld struct instance.
@@ -81,39 +89,26 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     }
 
     if ( IsKeyDown( KEY_A ) ) {
-        cameraHorAngle += 1.0f;
+        cameraYaw += CAMERA_YAW_SPEED * delta;
     }
     if ( IsKeyDown( KEY_D ) ) {
-        cameraHorAngle -= 1.0f;
+        cameraYaw -= CAMERA_YAW_SPEED * delta;
     }
 
     if ( IsKeyDown( KEY_W ) ) {
-        cameraVerAngle += 1.0f;
+        cameraPitch += CAMERA_PITCH_SPEED * delta;
     }
     if ( IsKeyDown( KEY_S ) ) {
-        cameraVerAngle -= 1.0f;
+        cameraPitch -= CAMERA_PITCH_SPEED * delta;
     }
+    cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
 
-    if ( IsKeyDown( KEY_HOME ) ) {
-        cameraOffsetY += 0.2f;
-    }
-    if ( IsKeyDown( KEY_END ) ) {
-        cameraOffsetY -= 0.2f;
-        if ( cameraOffsetY < 0.0f ) {
-            cameraOffsetY = 0.0f;
-        }
-    }
+    cameraDistance -= GetMouseWheelMove() * CAMERA_ZOOM_STEP;
+    cameraDistance = Clamp( cameraDistance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX );
 
-    gw->player->cameraAngle = cameraHorAngle;
+    gw->player->cameraAngle = cameraYaw;
     gw->player->input( gw->player );
     gw->player->update( gw->player, delta );
-
-    float w = GetMouseWheelMove();
-    if ( w < 0 ) {
-        cameraDistance += 0.2f;
-    } else if ( w > 0 ) {
-        cameraDistance -= 0.2f;
-    }
 
     updateCamera( &gw->camera, gw->player );
 
@@ -138,10 +133,17 @@ void drawGameWorld( GameWorld *gw ) {
 
 void updateCamera( Camera3D *camera, Player *player ) {
 
+    // spherical orbit
+    float yaw = cameraYaw * DEG2RAD;
+    float pitch = cameraPitch * DEG2RAD;
+
+    float horizontal = cameraDistance * cosf( pitch );
+    float height = cameraDistance * sinf( pitch );
+
     camera->position = (Vector3) { 
-        player->pos.x + cosf( cameraHorAngle * DEG2RAD ) * cameraDistance, 
-        player->pos.y + cameraOffsetY, 
-        player->pos.z + sinf( cameraHorAngle * DEG2RAD ) * cameraDistance, 
+        player->pos.x + horizontal * cosf( yaw ), 
+        player->pos.y + height, 
+        player->pos.z + horizontal * sinf( yaw ), 
     };
 
     camera->target = player->pos;
