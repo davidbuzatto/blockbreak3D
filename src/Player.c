@@ -13,6 +13,7 @@
 #include "raylib/raylib.h"
 #include "raylib/raymath.h"
 
+#include "Macros.h"
 #include "Map.h"
 #include "Player.h"
 #include "ResourceManager.h"
@@ -21,10 +22,12 @@ static const float GRAVITY = -25.0f;            // downward acceleration (units/
 static const float TERMINAL_VELOCITY = -50.0f;  // maximum fall speed (clamp)
 static const float JUMP_SPEED = 9.0f;           // initial upward velocity of a jump
 static const float MODEL_FACING_OFFSET = 0.0f;  // corrects the model's default facing
+static const float MAX_STEP_HEIGHT = 1.0f;      // tallest ledge the player auto-steps up
 
 static void input( Player *player );
 static void update( Player *player, float delta );
 static void draw( Player *player );
+static void moveAxis( Player *player, float *coord, float amount );
 
 /**
  * @brief Creates a dynamically allocated Player.
@@ -89,6 +92,40 @@ static void input( Player *player ) {
     int strafe   = ( IsKeyDown( KEY_A ) ? -1 : 0 ) + ( IsKeyDown( KEY_D ) ? 1 : 0 );
     int forward  = ( IsKeyDown( KEY_S ) ? -1 : 0 ) + ( IsKeyDown( KEY_W ) ? 1 : 0 );
 
+    // if using gamepad, vel multipliers will be varying from 0.0f to 1.0.
+    float velXMult = 1.0f;
+    float velYMult = 1.0f;
+    bool gamepadAvailable = IsGamepadAvailable( 0 );
+
+    // use gamepad only if none of the keys are down
+    if ( gamepadAvailable && strafe == 0 && forward == 0 ) {
+
+        float leftAnalogX = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_LEFT_X );
+        float leftAnalogY = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_LEFT_Y );
+        
+        velXMult = fabsf( leftAnalogX );
+        velYMult = fabsf( leftAnalogY );
+
+        if ( leftAnalogX < -0.2f ) {
+            strafe = -1;
+        } else if ( leftAnalogX > 0.2f ) {
+            strafe = 1;
+        } else {
+            strafe = 0;
+            velXMult = 1.0f;
+        }
+
+        if ( leftAnalogY < -0.2f ) {
+            forward = 1;
+        } else if ( leftAnalogY > 0.2f ) {
+            forward = -1;
+        } else {
+            forward = 0;
+            velYMult = 1.0f;
+        }
+        
+    }
+
     // build the camera-relative basis on the XZ plane from the camera angle.
     float a = player->cameraAngle * DEG2RAD;
     Vector3 fwd = { -cosf( a ), 0.0f, -sinf( a ) };  // toward the camera's view direction
@@ -106,12 +143,12 @@ static void input( Player *player ) {
         move = Vector3Normalize( move );
     }
 
-    player->vel.x = move.x * player->walkingSpeed;
-    player->vel.z = move.z * player->walkingSpeed;
+    player->vel.x = move.x * player->walkingSpeed * velXMult;
+    player->vel.z = move.z * player->walkingSpeed * velYMult;
 
     // jump: only when on the ground and only on the key press (not while held),
     // otherwise it would re-jump every frame.
-    if ( player->onGround && IsKeyPressed( KEY_SPACE ) ) {
+    if ( player->onGround && ( IsKeyPressed( KEY_SPACE ) || ( gamepadAvailable && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_FACE_DOWN ) ) ) ) {
         player->vel.y = JUMP_SPEED;
         player->onGround = false;
     }
@@ -131,7 +168,13 @@ static void update( Player *player, float delta ) {
 
     // --- horizontal movement, one axis at a time so we can slide along walls ---
 
+    // movement with auto-step.
+    moveAxis( player, &player->pos.x, player->vel.x * delta );
+    moveAxis( player, &player->pos.z, player->vel.z * delta );
+
+    // movement without auto-step.
     // X axis: move, then undo only X if it put us inside a block.
+    /*
     float dx = player->vel.x * delta;
     player->pos.x += dx;
     if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
@@ -144,6 +187,7 @@ static void update( Player *player, float delta ) {
     if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
         player->pos.z -= dz;
     }
+    */
 
     // face the direction of horizontal movement (keep the last facing when idle).
     // atan2(x, z) measures the angle from +Z, matching the Y rotation used to draw.
@@ -217,5 +261,26 @@ static void draw( Player *player ) {
 
     // debug: the collision box (player->dim) drawn around the model.
     DrawCubeWiresV( player->pos, player->dim, BLACK );
+
+}
+
+static void moveAxis( Player *player, float *coord, float amount ) {
+
+    float before = *coord;
+    *coord += amount;
+
+    if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
+        return;
+    }
+
+    if ( player->onGround ) {
+        player->pos.y += MAX_STEP_HEIGHT;
+        if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
+            return;
+        }
+        player->pos.y -= MAX_STEP_HEIGHT;
+    }
+
+    *coord = before;
 
 }

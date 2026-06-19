@@ -12,9 +12,10 @@
 #include "raylib/raymath.h"
 
 #include "GameWorld.h"
-#include "ResourceManager.h"
+#include "Macros.h"
 #include "Map.h"
 #include "Player.h"
+#include "ResourceManager.h"
 
 void updateCamera( Camera3D *camera, Player *player );
 
@@ -106,23 +107,40 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     }
 
     // --- orbit camera controls (keyboard) ---
+    bool rightDown = IsKeyDown( KEY_RIGHT );
+    bool leftDown = IsKeyDown( KEY_LEFT );
+    bool upDown = IsKeyDown( KEY_UP );
+    bool downDown = IsKeyDown( KEY_DOWN );
 
     // yaw: orbit left / right
-    if ( IsKeyDown( KEY_RIGHT ) ) {
+    if ( rightDown ) {
         cameraYaw += CAMERA_YAW_SPEED * delta;
     }
-    if ( IsKeyDown( KEY_LEFT ) ) {
+    if ( leftDown ) {
         cameraYaw -= CAMERA_YAW_SPEED * delta;
     }
 
     // pitch: orbit up / down, clamped so the camera never flips or goes underground
-    if ( IsKeyDown( KEY_UP ) ) {
+    if ( upDown ) {
         cameraPitch += CAMERA_PITCH_SPEED * delta;
     }
-    if ( IsKeyDown( KEY_DOWN ) ) {
+    if ( downDown ) {
         cameraPitch -= CAMERA_PITCH_SPEED * delta;
     }
     cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
+
+    // use gamepad only if none of the keys are down
+    if ( IsGamepadAvailable( 0 ) && !rightDown && !leftDown && !upDown && !downDown ) {
+        float rightAnalogX = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_RIGHT_X );
+        float rightAnalogY = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_RIGHT_Y );
+        if ( rightAnalogX < -0.2f || rightAnalogX > 0.2f ) {
+            cameraYaw += CAMERA_YAW_SPEED * delta * rightAnalogX;
+        }
+        if ( rightAnalogY < -0.2f || rightAnalogY > 0.2f ) {
+            cameraPitch -= CAMERA_PITCH_SPEED * delta * rightAnalogY; // invert y axis
+            cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
+        }
+    }
 
     // distance: zoom with the mouse wheel, clamped
     cameraDistance -= GetMouseWheelMove() * CAMERA_ZOOM_STEP;
