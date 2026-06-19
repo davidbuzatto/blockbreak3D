@@ -140,13 +140,14 @@ static void input( Player *player ) {
 }
 
 /**
- * @brief Advances the player's physics for one frame: horizontal movement with
- *        wall collision, gravity, and vertical movement with ground/ceiling
- *        collision.
+ * @brief Advances the player's physics for one frame: horizontal movement
+ *        (wall collision + auto-step), gravity, and vertical movement
+ *        (ground/ceiling collision, sub-stepped against tunneling).
  *
- * Movement is resolved one axis at a time (move, then undo that axis if it
- * caused an overlap), which lets the player slide along walls instead of
- * sticking to them.
+ * Horizontal is resolved one axis at a time so the player slides along walls,
+ * and climbs a 1-block ledge when possible (see moveAxis). Vertical is split
+ * into sub-steps no larger than a block, so a fast fall stops on the surface
+ * instead of skipping through it; landing snaps the feet onto the block top.
  */
 static void update( Player *player, float delta ) {
 
@@ -185,17 +186,33 @@ static void update( Player *player, float delta ) {
         player->vel.y = TERMINAL_VELOCITY;
     }
 
-    // --- vertical movement + ground/ceiling collision ---
+    // --- vertical movement + ground/ceiling collision, SUB-STEPPED so a fast fall can't pass
+    //     through the ground (or snap onto a buried block) ---
     float dy = player->vel.y * delta;
-    player->pos.y += dy;
 
-    if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
+    // split dy into chunks no larger than (almost) one block, so the box always
+    // meets a floor/ceiling before it could skip past it.
+    float maxStep = player->map->blockSize * 0.9f;
+    int steps = (int) ceilf( fabsf( dy ) / maxStep );
+    if ( steps < 1 ) {
+        steps = 1;
+    }
+    float stepY = dy / steps;
+
+    // assume airborne; a downward sub-step that lands sets this back to true.
+    player->onGround = false;
+
+    for ( int s = 0; s < steps; s++ ) {
+
+        player->pos.y += stepY;
+
+        if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
+            continue;  // this slice is clear, keep falling/rising
+        }
 
         if ( dy <= 0.0f ) {
 
-            // falling: snap the feet onto the top of the block below, so the
-            // player rests exactly on the surface (no hovering/jitter) and
-            // onGround stays stable (which the jump relies on).
+            // falling: snap the feet onto the top of the block we just touched.
             float feetY = player->pos.y - player->dim.y * 0.5f;
             int la = (int) floorf( ( feetY - player->map->pos.y ) / player->map->blockSize + 0.5f );
             float blockTop = player->map->pos.y + player->map->blockSize * la + player->map->blockSize * 0.5f;
@@ -203,15 +220,13 @@ static void update( Player *player, float delta ) {
             player->onGround = true;
 
         } else {
-            // rising into a ceiling: just cancel the upward step.
-            player->pos.y -= dy;
+            // rising into a ceiling: undo just this sub-step.
+            player->pos.y -= stepY;
         }
 
         player->vel.y = 0.0f;
+        break;   // resolved this frame's vertical movement; stop slicing.
 
-    } else {
-        // nothing under (or above) us: airborne.
-        player->onGround = false;
     }
 
 }
