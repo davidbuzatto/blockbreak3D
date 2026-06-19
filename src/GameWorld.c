@@ -18,20 +18,21 @@
 
 void updateCamera( Camera3D *camera, Player *player );
 
-float cameraYaw = 90.0f;        // horizontal angle
-float cameraPitch = 30.0f;      // vertical angle
-float cameraDistance = 10.0f;   // orbit radius
+// orbit camera state (spherical coordinates around the player)
+float cameraYaw      = 90.0f;   // horizontal angle (deg)
+float cameraPitch    = 30.0f;   // vertical angle (deg)
+float cameraDistance = 10.0f;   // orbit radius (world units)
 
-static const float CAMERA_YAW_SPEED = 90.0f;
-static const float CAMERA_PITCH_SPEED = 90.0f;
-static const float CAMERA_PITCH_MIN = 5.0f;
-static const float CAMERA_PITCH_MAX = 85.0f;
-static const float CAMERA_ZOOM_STEP = 1.0f;
-static const float CAMERA_DISTANCE_MIN = 3.0f;
-static const float CAMERA_DISTANCE_MAX = 40.0f;
+static const float CAMERA_YAW_SPEED    = 90.0f;   // yaw rotation speed (deg/s)
+static const float CAMERA_PITCH_SPEED  = 90.0f;   // pitch rotation speed (deg/s)
+static const float CAMERA_PITCH_MIN    = 5.0f;    // keep the camera above the ground
+static const float CAMERA_PITCH_MAX    = 85.0f;   // keep the camera from flipping over
+static const float CAMERA_ZOOM_STEP    = 1.0f;    // distance change per wheel notch
+static const float CAMERA_DISTANCE_MIN = 3.0f;    // closest zoom
+static const float CAMERA_DISTANCE_MAX = 40.0f;   // farthest zoom
 
 /**
- * @brief Creates a dinamically allocated GameWorld struct instance.
+ * @brief Creates a dynamically allocated GameWorld struct instance.
  */
 GameWorld *createGameWorld( void ) {
 
@@ -42,8 +43,8 @@ GameWorld *createGameWorld( void ) {
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
-    gw->player = createPlayer( 0, 30, 0, 1, BLUE );
-    gw->player->map = gw->map;
+    gw->player = createPlayer( 0, 30, 0, 1, BLUE );   // spawn high so it falls onto the terrain
+    gw->player->map = gw->map;                        // give the player the world to collide against
 
     gw->camera.position = (Vector3) { 0.0f, 0.0f, 0.0f };
     gw->camera.target = gw->player->pos;
@@ -55,12 +56,22 @@ GameWorld *createGameWorld( void ) {
 
 }
 
+/**
+ * @brief Frees the game world and everything it owns (map and player).
+ */
 void destroyGameWorld( GameWorld *gw ) {
     destroyMap( gw->map );
     destroyPlayer( gw->player );
     free( gw );
 }
 
+/**
+ * @brief Updates the world for one frame: block-edit test input, orbit camera
+ *        controls, and the player's input + physics.
+ *
+ * @param gw     The game world.
+ * @param delta  Seconds elapsed since the last frame.
+ */
 void updateGameWorld( GameWorld *gw, float delta ) {
 
     // breakBlock test (break blocks that are below the player)
@@ -88,6 +99,9 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 
     }
 
+    // --- orbit camera controls (keyboard) ---
+
+    // yaw: orbit left / right
     if ( IsKeyDown( KEY_A ) ) {
         cameraYaw += CAMERA_YAW_SPEED * delta;
     }
@@ -95,6 +109,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         cameraYaw -= CAMERA_YAW_SPEED * delta;
     }
 
+    // pitch: orbit up / down, clamped so the camera never flips or goes underground
     if ( IsKeyDown( KEY_W ) ) {
         cameraPitch += CAMERA_PITCH_SPEED * delta;
     }
@@ -103,17 +118,24 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     }
     cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
 
+    // distance: zoom with the mouse wheel, clamped
     cameraDistance -= GetMouseWheelMove() * CAMERA_ZOOM_STEP;
     cameraDistance = Clamp( cameraDistance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX );
 
+    // keep player movement relative to the camera's horizontal angle, then run
+    // the player's input + physics for this frame.
     gw->player->cameraAngle = cameraYaw;
     gw->player->input( gw->player );
     gw->player->update( gw->player, delta );
 
+    // place the camera based on the (possibly updated) player position.
     updateCamera( &gw->camera, gw->player );
 
 }
 
+/**
+ * @brief Draws one frame: the 3D scene (map, player, grid) plus the FPS overlay.
+ */
 void drawGameWorld( GameWorld *gw ) {
 
     BeginDrawing();
@@ -131,14 +153,18 @@ void drawGameWorld( GameWorld *gw ) {
 
 }
 
+/**
+ * @brief Positions the camera on a sphere around the player from the current
+ *        yaw / pitch / distance, looking back at the player.
+ */
 void updateCamera( Camera3D *camera, Player *player ) {
 
-    // spherical orbit
-    float yaw = cameraYaw * DEG2RAD;
+    // spherical orbit: turn yaw/pitch/distance into an offset from the player.
+    float yaw   = cameraYaw * DEG2RAD;
     float pitch = cameraPitch * DEG2RAD;
 
-    float horizontal = cameraDistance * cosf( pitch );
-    float height = cameraDistance * sinf( pitch );
+    float horizontal = cameraDistance * cosf( pitch );  // radius projected on XZ
+    float height     = cameraDistance * sinf( pitch );  // vertical part of the radius
 
     camera->position = (Vector3) { 
         player->pos.x + horizontal * cosf( yaw ), 
