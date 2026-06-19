@@ -24,13 +24,14 @@ float cameraYaw      = 90.0f;   // horizontal angle (deg)
 float cameraPitch    = 30.0f;   // vertical angle (deg)
 float cameraDistance = 10.0f;   // orbit radius (world units)
 
-static const float CAMERA_YAW_SPEED    = 90.0f;   // yaw rotation speed (deg/s)
-static const float CAMERA_PITCH_SPEED  = 90.0f;   // pitch rotation speed (deg/s)
-static const float CAMERA_PITCH_MIN    = 5.0f;    // keep the camera above the ground
-static const float CAMERA_PITCH_MAX    = 85.0f;   // keep the camera from flipping over
-static const float CAMERA_ZOOM_STEP    = 1.0f;    // distance change per wheel notch
-static const float CAMERA_DISTANCE_MIN = 3.0f;    // closest zoom
-static const float CAMERA_DISTANCE_MAX = 40.0f;   // farthest zoom
+static const float CAMERA_YAW_SPEED      = 90.0f;   // yaw rotation speed (deg/s)
+static const float CAMERA_PITCH_SPEED    = 90.0f;   // pitch rotation speed (deg/s)
+static const float CAMERA_PITCH_MIN      = 5.0f;    // keep the camera above the ground
+static const float CAMERA_PITCH_MAX      = 85.0f;   // keep the camera from flipping over
+static const float CAMERA_ZOOM_STEP      = 1.0f;    // distance change per wheel notch
+static const float CAMERA_DISTANCE_MIN   = 3.0f;    // closest zoom
+static const float CAMERA_DISTANCE_MAX   = 40.0f;   // farthest zoom
+static const float CAMERA_STICK_DEADZONE = 0.1f;    // ignore tiny left-stick noise
 
 /**
  * @brief Creates a dynamically allocated GameWorld struct instance.
@@ -127,20 +128,20 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     if ( downDown ) {
         cameraPitch -= CAMERA_PITCH_SPEED * delta;
     }
-    cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
 
     // use gamepad only if none of the keys are down
     if ( IsGamepadAvailable( 0 ) && !rightDown && !leftDown && !upDown && !downDown ) {
         float rightAnalogX = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_RIGHT_X );
         float rightAnalogY = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_RIGHT_Y );
-        if ( rightAnalogX < -0.2f || rightAnalogX > 0.2f ) {
+        if ( rightAnalogX < -CAMERA_STICK_DEADZONE || rightAnalogX > CAMERA_STICK_DEADZONE ) {
             cameraYaw += CAMERA_YAW_SPEED * delta * rightAnalogX;
         }
-        if ( rightAnalogY < -0.2f || rightAnalogY > 0.2f ) {
+        if ( rightAnalogY < -CAMERA_STICK_DEADZONE || rightAnalogY > CAMERA_STICK_DEADZONE ) {
             cameraPitch -= CAMERA_PITCH_SPEED * delta * rightAnalogY; // invert y axis
-            cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
         }
     }
+
+    cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
 
     // distance: zoom with the mouse wheel, clamped
     cameraDistance -= GetMouseWheelMove() * CAMERA_ZOOM_STEP;

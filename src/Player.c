@@ -23,6 +23,7 @@ static const float TERMINAL_VELOCITY = -50.0f;  // maximum fall speed (clamp)
 static const float JUMP_SPEED = 9.0f;           // initial upward velocity of a jump
 static const float MODEL_FACING_OFFSET = 0.0f;  // corrects the model's default facing
 static const float MAX_STEP_HEIGHT = 1.0f;      // tallest ledge the player auto-steps up
+static const float STICK_DEADZONE = 0.1f;       // ignore tiny left-stick noise
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -85,45 +86,24 @@ void destroyPlayer( Player *player ) {
  *        jump. Vertical velocity is otherwise controlled by gravity in update().
  */
 static void input( Player *player ) {
-    
-    // raw movement intent from the keys, in camera-relative axes:
-    //     strafe  = sideways
-    //     forward = toward where the camera looks
-    int strafe   = ( IsKeyDown( KEY_A ) ? -1 : 0 ) + ( IsKeyDown( KEY_D ) ? 1 : 0 );
-    int forward  = ( IsKeyDown( KEY_S ) ? -1 : 0 ) + ( IsKeyDown( KEY_W ) ? 1 : 0 );
 
-    // if using gamepad, vel multipliers will be varying from 0.0f to 1.0.
-    float velXMult = 1.0f;
-    float velYMult = 1.0f;
+    // movement intent on two camera-relative axes, -1..+1 each:
+    //     strafe  = sideways,  forward = toward where the camera looks.
+    float strafe  = ( IsKeyDown( KEY_A ) ? -1.0f : 0.0f ) + ( IsKeyDown( KEY_D ) ? 1.0f : 0.0f );
+    float forward = ( IsKeyDown( KEY_S ) ? -1.0f : 0.0f ) + ( IsKeyDown( KEY_W ) ? 1.0f : 0.0f );
+
+    // if no movement key is held, fall back to the gamepad left stick (analog).
     bool gamepadAvailable = IsGamepadAvailable( 0 );
-
-    // use gamepad only if none of the keys are down
-    if ( gamepadAvailable && strafe == 0 && forward == 0 ) {
+    if ( gamepadAvailable && strafe == 0.0f && forward == 0.0f ) {
 
         float leftAnalogX = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_LEFT_X );
         float leftAnalogY = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_LEFT_Y );
-        
-        velXMult = fabsf( leftAnalogX );
-        velYMult = fabsf( leftAnalogY );
 
-        if ( leftAnalogX < -0.2f ) {
-            strafe = -1;
-        } else if ( leftAnalogX > 0.2f ) {
-            strafe = 1;
-        } else {
-            strafe = 0;
-            velXMult = 1.0f;
+        // radial deadzone (by vector length, so it doesn't bias diagonals).
+        if ( leftAnalogX * leftAnalogX + leftAnalogY * leftAnalogY > STICK_DEADZONE * STICK_DEADZONE ) {
+            strafe  = leftAnalogX;     // stick right = +X
+            forward = -leftAnalogY;    // stick up = -Y  ->  forward
         }
-
-        if ( leftAnalogY < -0.2f ) {
-            forward = 1;
-        } else if ( leftAnalogY > 0.2f ) {
-            forward = -1;
-        } else {
-            forward = 0;
-            velYMult = 1.0f;
-        }
-        
     }
 
     // build the camera-relative basis on the XZ plane from the camera angle.
@@ -131,20 +111,24 @@ static void input( Player *player ) {
     Vector3 fwd = { -cosf( a ), 0.0f, -sinf( a ) };  // toward the camera's view direction
     Vector3 right = { sinf( a ), 0.0f, -cosf( a ) }; // perpendicular, to the right
 
-    // combine both diretions weighted by the input.
+    // combine both directions weighted by the input.
     Vector3 move = {
         fwd.x * forward + right.x * strafe,
         0.0f,
         fwd.z * forward + right.z * strafe
     };
 
-    // normalize so moving diagonally isn't faster than straight, then scale by speed.
-    if ( move.x != 0.0f || move.z != 0.0f ) {
-        move = Vector3Normalize( move );
+    // clamp the move length to 1: keyboard diagonals (length ~1.41) normalize
+    // down to full speed, while a half-pushed analog stick (length < 1) stays
+    // slower. Scaling each axis by its own stick value instead would shrink
+    // diagonals to ~0.7 -- that was the "diagonal is slow" bug.
+    float len = Vector3Length( move );
+    if ( len > 1.0f ) {
+        move = Vector3Scale( move, 1.0f / len );
     }
 
-    player->vel.x = move.x * player->walkingSpeed * velXMult;
-    player->vel.z = move.z * player->walkingSpeed * velYMult;
+    player->vel.x = move.x * player->walkingSpeed;
+    player->vel.z = move.z * player->walkingSpeed;
 
     // jump: only when on the ground and only on the key press (not while held),
     // otherwise it would re-jump every frame.
@@ -264,23 +248,36 @@ static void draw( Player *player ) {
 
 }
 
+/**
+ * @brief Moves the player along one horizontal axis by 'amount', resolving
+ *        collision and auto-stepping up a 1-block ledge.
+ *
+ * 'coord' points at the coordinate to change (&player->pos.x or &player->pos.z),
+ * so the same logic serves both X and Z.
+ */
 static void moveAxis( Player *player, float *coord, float amount ) {
 
     float before = *coord;
     *coord += amount;
 
+    // moved freely? nothing else to do.
     if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
         return;
     }
 
+    // blocked. only try to climb when on the ground (no wall-climbing mid-air).
     if ( player->onGround ) {
+
+        // try the same move lifted by a step: if it's clear now, we climbed a
+        // ledge; the gravity + ground snap later this frame settles us onto it.
         player->pos.y += MAX_STEP_HEIGHT;
         if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
-            return;
+            return;   // stepped up successfully
         }
-        player->pos.y -= MAX_STEP_HEIGHT;
+        player->pos.y -= MAX_STEP_HEIGHT;   // still blocked even when raised
     }
 
+    // truly blocked (a real wall): undo the horizontal move.
     *coord = before;
 
 }
