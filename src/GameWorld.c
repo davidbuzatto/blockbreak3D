@@ -56,7 +56,7 @@ void destroyGameWorld( GameWorld *gw ) {
 void updateGameWorld( GameWorld *gw, float delta ) {
 
     // breakBlock test (break blocks that are below the player)
-    if ( IsKeyDown( KEY_B ) ) {
+    if ( IsKeyPressed( KEY_B ) ) {
 
         Map *map = gw->map;
         

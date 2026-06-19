@@ -84,8 +84,17 @@ static void input( Player *player ) {
 
 static void update( Player *player, float delta ) {
 
-    player->pos.x += player->vel.x * delta;
-    player->pos.z += player->vel.z * delta;
+    float dx = player->vel.x * delta;
+    player->pos.x += dx;
+    if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
+        player->pos.x -= dx;
+    }
+
+    float dz = player->vel.z * delta;
+    player->pos.z += dz;
+    if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
+        player->pos.z -= dz;
+    }
 
     player->vel.y += GRAVITY * delta;
     if ( player->vel.y < TERMINAL_VELOCITY ) {
