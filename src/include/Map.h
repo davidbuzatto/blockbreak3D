@@ -86,3 +86,8 @@ void destroyMap( Map *map );
  *        into air, and update the rendered geometry incrementally.
  */
 void breakBlock( Map *map, int la, int i, int j );
+
+/**
+ * @brief
+ */
+bool mapBoxCollides( Map *map, Vector3 center, Vector3 size );

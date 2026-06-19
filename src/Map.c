@@ -32,6 +32,7 @@
  */
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 
 #include "raylib/raylib.h"
 #include "stb/stb_perlin.h"
@@ -302,6 +303,41 @@ void breakBlock( Map *map, int la, int i, int j ) {
 
             break;
     }
+
+}
+
+bool mapBoxCollides( Map *map, Vector3 center, Vector3 size ) {
+
+    float hx = size.x * 0.5f;
+    float hy = size.y * 0.5f;
+    float hz = size.z * 0.5f;
+
+    // AABB
+    float minX = center.x - hx;
+    float maxX = center.x + hx;
+    float minY = center.y - hy;
+    float maxY = center.y + hy;
+    float minZ = center.z - hz;
+    float maxZ = center.z + hz;
+
+    int jmin  = (int) floorf( ( minX - map->pos.x ) / map->blockSize + 0.5f );
+    int jmax  = (int) floorf( ( maxX - map->pos.x ) / map->blockSize + 0.5f );
+    int lamin = (int) floorf( ( minY - map->pos.y ) / map->blockSize + 0.5f );
+    int lamax = (int) floorf( ( maxY - map->pos.y ) / map->blockSize + 0.5f );
+    int imin  = (int) floorf( ( minZ - map->pos.z ) / map->blockSize + 0.5f );
+    int imax  = (int) floorf( ( maxZ - map->pos.z ) / map->blockSize + 0.5f );
+
+    for ( int la = lamin; la <= lamax; la++ ) {
+        for ( int i = imin; i <= imax; i++ ) {
+            for ( int j = jmin; j <= jmax; j++ ) {
+                if ( isSolid( map, la, i, j ) ) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
 
 }
 

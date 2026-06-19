@@ -5,7 +5,12 @@
 #include "raylib/raylib.h"
 #include "raylib/raymath.h"
 
+#include "Map.h"
 #include "Player.h"
+
+static const float GRAVITY = -25.0f;           // world units / s^2
+static const float TERMINAL_VELOCITY = -50.0f;
+static const float JUMP_SPEED = 9.0f;
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -21,6 +26,9 @@ Player *createPlayer( float x, float y, float z, float size, Color color ) {
 
     new->walkingSpeed = 5.0f;
     new->cameraAngle = 0.0f;
+
+    new->map = NULL;
+    new->onGround = false;
 
     new->color = color;
 
@@ -46,7 +54,6 @@ static void input( Player *player ) {
     //     vertical = up and down
     int strafe   = ( IsKeyDown( KEY_LEFT ) ? -1 : 0 ) + ( IsKeyDown( KEY_RIGHT ) ? 1 : 0 );
     int forward  = ( IsKeyDown( KEY_DOWN ) ? -1 : 0 ) + ( IsKeyDown( KEY_UP ) ? 1 : 0 );
-    int vertical = ( IsKeyDown( KEY_DELETE ) ? -1 : 0 ) + ( IsKeyDown( KEY_INSERT ) ? 1 : 0 );
 
     // build the camera-relative basis on the XZ plane from the camera angle.
     float a = player->cameraAngle * DEG2RAD;
@@ -66,15 +73,49 @@ static void input( Player *player ) {
     }
 
     player->vel.x = move.x * player->walkingSpeed;
-    player->vel.y = vertical * player->walkingSpeed;
     player->vel.z = move.z * player->walkingSpeed;
+
+    if ( player->onGround && IsKeyPressed( KEY_SPACE ) ) {
+        player->vel.y = JUMP_SPEED;
+        player->onGround = false;
+    }
 
 }
 
 static void update( Player *player, float delta ) {
+
     player->pos.x += player->vel.x * delta;
-    player->pos.y += player->vel.y * delta;
     player->pos.z += player->vel.z * delta;
+
+    player->vel.y += GRAVITY * delta;
+    if ( player->vel.y < TERMINAL_VELOCITY ) {
+        player->vel.y = TERMINAL_VELOCITY;
+    }
+
+    float dy = player->vel.y * delta;
+    player->pos.y += dy;
+
+    if ( mapBoxCollides( player->map, player->pos, player->dim ) ) {
+
+        // falling
+        if ( dy <= 0.0f ) {
+
+            float feetY = player->pos.y - player->dim.y * 0.5f;
+            int la = (int) floorf( ( feetY - player->map->pos.y ) / player->map->blockSize + 0.5f );
+            float blockTop = player->map->pos.y + player->map->blockSize * la + player->map->blockSize * 0.5f;
+            player->pos.y = blockTop + player->dim.y * 0.5f;
+            player->onGround = true;
+
+        } else {
+            player->pos.y -= dy;
+        }
+
+        player->vel.y = 0.0f;
+
+    } else {
+        player->onGround = false;
+    }
+
 }
 
 static void draw( Player *player ) {

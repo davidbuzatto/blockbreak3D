@@ -18,7 +18,8 @@
 
 void updateCamera( Camera3D *camera, Player *player );
 float cameraOffsetY = 5.0f;
-float cameraAngle = 90.0f;
+float cameraHorAngle = 90.0f;
+float cameraVerAngle = 90.0f;
 float cameraDistance = 10.0f;
 
 /**
@@ -33,7 +34,8 @@ GameWorld *createGameWorld( void ) {
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
-    gw->player = createPlayer( 0, 10, 0, 1, BLUE );
+    gw->player = createPlayer( 0, 30, 0, 1, BLUE );
+    gw->player->map = gw->map;
 
     gw->camera.position = (Vector3) { 0.0f, 0.0f, 0.0f };
     gw->camera.target = gw->player->pos;
@@ -54,7 +56,7 @@ void destroyGameWorld( GameWorld *gw ) {
 void updateGameWorld( GameWorld *gw, float delta ) {
 
     // breakBlock test (break blocks that are below the player)
-    if ( IsKeyDown( KEY_SPACE ) ) {
+    if ( IsKeyDown( KEY_B ) ) {
 
         Map *map = gw->map;
         
@@ -78,11 +80,18 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 
     }
 
-    if ( IsKeyDown( KEY_PAGE_UP ) ) {
-        cameraAngle += 1.0f;
+    if ( IsKeyDown( KEY_A ) ) {
+        cameraHorAngle += 1.0f;
     }
-    if ( IsKeyDown( KEY_PAGE_DOWN ) ) {
-        cameraAngle -= 1.0f;
+    if ( IsKeyDown( KEY_D ) ) {
+        cameraHorAngle -= 1.0f;
+    }
+
+    if ( IsKeyDown( KEY_W ) ) {
+        cameraVerAngle += 1.0f;
+    }
+    if ( IsKeyDown( KEY_S ) ) {
+        cameraVerAngle -= 1.0f;
     }
 
     if ( IsKeyDown( KEY_HOME ) ) {
@@ -95,7 +104,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         }
     }
 
-    gw->player->cameraAngle = cameraAngle;
+    gw->player->cameraAngle = cameraHorAngle;
     gw->player->input( gw->player );
     gw->player->update( gw->player, delta );
 
@@ -130,9 +139,9 @@ void drawGameWorld( GameWorld *gw ) {
 void updateCamera( Camera3D *camera, Player *player ) {
 
     camera->position = (Vector3) { 
-        player->pos.x + cosf( cameraAngle * DEG2RAD ) * cameraDistance, 
+        player->pos.x + cosf( cameraHorAngle * DEG2RAD ) * cameraDistance, 
         player->pos.y + cameraOffsetY, 
-        player->pos.z + sinf( cameraAngle * DEG2RAD ) * cameraDistance, 
+        player->pos.z + sinf( cameraHorAngle * DEG2RAD ) * cameraDistance, 
     };
 
     camera->target = player->pos;

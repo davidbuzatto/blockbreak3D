@@ -2,6 +2,8 @@
 
 #include "raylib/raylib.h"
 
+#include "Map.h"
+
 typedef struct Player Player;
 
 struct Player {
@@ -12,6 +14,9 @@ struct Player {
 
     float walkingSpeed;
     float cameraAngle;
+
+    Map *map;
+    bool onGround;
 
     Color color;
 
