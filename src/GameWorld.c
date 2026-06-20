@@ -214,6 +214,10 @@ void updateCamera( Camera3D *camera, Player *player ) {
 
 }
 
+/**
+ * @brief Draws the 2D HUD: the available-materials counter (on a translucent
+ *        background) plus the FPS.
+ */
 static void drawHud( GameWorld *gw ) {
 
     const char *text = TextFormat( "Available Materials: %d", gw->player->availableMaterials );
