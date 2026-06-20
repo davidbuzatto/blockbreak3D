@@ -34,6 +34,7 @@ float cameraPitch    = 30.0f;   // vertical angle (deg)
 float cameraDistance = 10.0f;   // orbit radius (world units)
 
 static void updateCamera( Camera3D *camera, Player *player );
+static void drawHud( GameWorld *gw );
 static void drawTargetBlockHighlighting( GameWorld *gw );
 static void drawCrosshair( void );
 
@@ -161,7 +162,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     if ( gw->targetBlock.hit &&
         ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) ) {
-        breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
+        gw->player->availableMaterials += breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
     }
 
 }
@@ -184,7 +185,7 @@ void drawGameWorld( GameWorld *gw ) {
     EndMode3D();
 
     drawCrosshair();
-    DrawFPS( 10, 10 );
+    drawHud( gw );
 
     EndDrawing();
 
@@ -213,6 +214,17 @@ void updateCamera( Camera3D *camera, Player *player ) {
 
 }
 
+static void drawHud( GameWorld *gw ) {
+
+    const char *text = TextFormat( "Available Materials: %d", gw->player->availableMaterials );
+    int w = MeasureText( text, 20 );
+    DrawRectangle( 10, 10, w + 10, 30, Fade( WHITE, 0.5f ) );
+    DrawText( text, 15, 15, 20, BLACK );
+
+    DrawFPS( 10, GetScreenHeight() - 25 );
+
+}
+
 /**
  * @brief Draws a wireframe box around the block currently under the crosshair.
  */
@@ -230,6 +242,7 @@ static void drawTargetBlockHighlighting( GameWorld *gw ) {
         // slightly enlarged so the wires don't z-fight with the block's faces.
         float s = gw->map->blockSize * 1.02f;
         DrawCubeWires( blockCenter, s, s, s, YELLOW );
+
     }
 
 }

@@ -61,6 +61,7 @@ Player *createPlayer( float x, float y, float z, float width, float height, Colo
 
     new->map = NULL;
     new->onGround = false;
+    new->availableMaterials = 200;
 
     new->color = color;
 

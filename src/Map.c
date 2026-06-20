@@ -248,15 +248,18 @@ void destroyMap( Map *map ) {
  * single mesh must be fully rebuilt; the chunked strategy rebuilds only the
  * affected chunk(s).
  */
-void breakBlock( Map *map, int la, int i, int j ) {
+int breakBlock( Map *map, int la, int i, int j ) {
 
     // ignore out-of-bounds coordinates or cells that are already air.
     if ( !isSolid( map, la, i, j ) ) {
-        return;
+        return 0;
     }
 
-    // 1) change the data: the block becomes air.
     int p = la * ( map->rows * map->cols ) + i * map->cols + j;
+
+    int materialsToAquire = map->blocks[p].materialsToAquire;
+
+    // 1) change the data: the block becomes air.
     map->blocks[p].broken = true;
 
     // 2) update the geometry for the active strategy.
@@ -302,7 +305,10 @@ void breakBlock( Map *map, int la, int i, int j ) {
             }
 
             break;
+
     }
+
+    return materialsToAquire;
 
 }
 
@@ -526,7 +532,7 @@ static void fillMap( Map *map, float scale, float seed ) {
 
                 Color color = ORANGE;
                 int hitsToBreak = 1;
-                int materialsToAquire = 0;
+                int materialsToAquire = 1;
 
                 // everything above the surface is air.
                 bool broken = la > h;

@@ -100,9 +100,10 @@ void destroyMap( Map *map );
 
 /**
  * @brief Breaks (removes) the block at the grid coordinate (la, i, j), turning it
- *        into air, and update the rendered geometry incrementally.
+ *        into air, and update the rendered geometry incrementally. Returns the material
+ *        it yielded (0 if there was nothing to break).
  */
-void breakBlock( Map *map, int la, int i, int j );
+int breakBlock( Map *map, int la, int i, int j );
 
 /**
  * @brief Returns true if an axis-aligned box (centered at 'center', with the

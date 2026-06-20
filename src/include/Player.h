@@ -27,6 +27,7 @@ struct Player {
 
     Map *map;               // world the player moves and collides against.
     bool onGround;          // true when standing on a solid block (enables jump).
+    int availableMaterials; // available materials to build new blocks and collected from broken blocks.
 
     Color color;
 
