@@ -259,7 +259,7 @@ static void draw( Player *player ) {
     );
 
     // debug: the collision box (player->dim) drawn around the model.
-    DrawCubeWiresV( player->pos, player->dim, BLACK );
+    //DrawCubeWiresV( player->pos, player->dim, BLACK );
 
 }
 

@@ -15,6 +15,7 @@
 
 typedef struct Map Map;
 typedef struct Chunk Chunk;
+typedef struct RayHit RayHit;
 
 /**
  * @brief A 3D grid of blocks representing the world's terrain.
@@ -70,6 +71,16 @@ struct Chunk {
     Mesh mesh;
 };
 
+struct RayHit {
+    int hit;
+    int la;
+    int i;
+    int j;
+    int pla;
+    int pi;
+    int pj;
+};
+
 /**
  * @brief Creates a map, generates its terrain and builds its render mesh.
  * @see createMap implementation in Map.c for parameter details.
@@ -92,3 +103,5 @@ void breakBlock( Map *map, int la, int i, int j );
  *        given 'size') overlaps any solid block. Used for player collision.
  */
 bool mapBoxCollides( Map *map, Vector3 center, Vector3 size );
+
+RayHit mapRaycast( Map *map, Ray ray, float maxDistance );

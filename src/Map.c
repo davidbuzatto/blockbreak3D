@@ -356,6 +356,102 @@ bool mapBoxCollides( Map *map, Vector3 center, Vector3 size ) {
 
 }
 
+RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
+
+    RayHit result = { 0 };
+
+    Vector3 d = Vector3Normalize( ray.direction );
+
+    float gx = ( ray.position.x - map->pos.x ) / map->blockSize + 0.5f;
+    float gy = ( ray.position.y - map->pos.y ) / map->blockSize + 0.5f;
+    float gz = ( ray.position.z - map->pos.z ) / map->blockSize + 0.5f;
+
+    int j  = (int) floorf( gx );
+    int la = (int) floorf( gy );
+    int i  = (int) floorf( gz );
+
+    int stepX = d.x >= 0.0f ? 1 : -1;
+    int stepY = d.y >= 0.0f ? 1 : -1;
+    int stepZ = d.z >= 0.0f ? 1 : -1;
+
+    float tDeltaX = d.x != 0.0f ? map->blockSize / fabsf( d.x ) : INFINITY;
+    float tDeltaY = d.y != 0.0f ? map->blockSize / fabsf( d.y ) : INFINITY;
+    float tDeltaZ = d.z != 0.0f ? map->blockSize / fabsf( d.z ) : INFINITY;
+
+    float tMaxX = INFINITY;
+    float tMaxY = INFINITY;
+    float tMaxZ = INFINITY;
+
+    if ( d.x != 0.0f ) {
+        if ( d.x > 0 ) {
+            tMaxX = j + 1 - gx;
+        } else {
+            tMaxX = gx - j;
+        }
+        tMaxX *= tDeltaX;
+    }
+
+    if ( d.y != 0.0f ) {
+        if ( d.y > 0 ) {
+            tMaxY = la + 1 - gy;
+        } else {
+            tMaxY = gy - la;
+        }
+        tMaxY *= tDeltaY;
+    }
+
+    if ( d.z != 0.0f ) {
+        if ( d.z > 0 ) {
+            tMaxZ = i + 1 - gz;
+        } else {
+            tMaxZ = gz - i;
+        }
+        tMaxZ *= tDeltaZ;
+    }
+
+    int pj = j;
+    int pla = la;
+    int pi = i;
+
+    float t = 0.0f;
+
+    while ( t <= maxDistance ) {
+
+        if ( isSolid( map, la, i, j ) ) {
+            result.hit = true;
+            result.la  = la;
+            result.i   = i;
+            result.j   = j;
+            result.pla = pla;
+            result.pi  = pi;
+            result.pj  = pj;
+            return result;
+        }
+
+        pj = j;
+        pla = la;
+        pi = i;
+
+        if ( tMaxX < tMaxY && tMaxX < tMaxZ ) {
+            j += stepX;
+            t = tMaxX;
+            tMaxX += tDeltaX;
+        } else if ( tMaxY < tMaxZ ) {
+            la += stepY;
+            t = tMaxY;
+            tMaxY += tDeltaY;
+        } else {
+            i += stepZ;
+            t = tMaxZ;
+            tMaxZ += tDeltaZ;
+        }
+
+    }
+
+    return result;
+
+}
+
 /**
  * @brief Procedurally generates the terrain, filling map->blocks.
  *

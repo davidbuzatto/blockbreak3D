@@ -17,13 +17,6 @@
 #include "Player.h"
 #include "ResourceManager.h"
 
-void updateCamera( Camera3D *camera, Player *player );
-
-// orbit camera state (spherical coordinates around the player)
-float cameraYaw      = 90.0f;   // horizontal angle (deg)
-float cameraPitch    = 30.0f;   // vertical angle (deg)
-float cameraDistance = 10.0f;   // orbit radius (world units)
-
 static const float CAMERA_YAW_SPEED      = 90.0f;   // yaw rotation speed (deg/s)
 static const float CAMERA_PITCH_SPEED    = 90.0f;   // pitch rotation speed (deg/s)
 static const float CAMERA_PITCH_MIN      = 5.0f;    // keep the camera above the ground
@@ -32,6 +25,15 @@ static const float CAMERA_ZOOM_STEP      = 1.0f;    // distance change per wheel
 static const float CAMERA_DISTANCE_MIN   = 3.0f;    // closest zoom
 static const float CAMERA_DISTANCE_MAX   = 40.0f;   // farthest zoom
 static const float CAMERA_STICK_DEADZONE = 0.1f;    // ignore tiny left-stick noise
+
+// orbit camera state (spherical coordinates around the player)
+float cameraYaw      = 90.0f;   // horizontal angle (deg)
+float cameraPitch    = 30.0f;   // vertical angle (deg)
+float cameraDistance = 10.0f;   // orbit radius (world units)
+
+static void updateCamera( Camera3D *camera, Player *player );
+static void drawTargetBlockHighlighting( GameWorld *gw );
+static void drawCrosshair( void );
 
 /**
  * @brief Creates a dynamically allocated GameWorld struct instance.
@@ -45,7 +47,7 @@ GameWorld *createGameWorld( void ) {
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
-    gw->player = createPlayer( 0, 30, 0, 0.8f, 2.0f, BLUE );   // spawn high so it falls onto the terrain
+    gw->player = createPlayer( 0, 18, 0, 0.8f, 2.0f, BLUE );   // spawn high so it falls onto the terrain
     gw->player->map = gw->map;                        // give the player the world to collide against
 
     // start the model facing "forward" (away from the camera) instead of looking
@@ -156,6 +158,10 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     // place the camera based on the (possibly updated) player position.
     updateCamera( &gw->camera, gw->player );
 
+    Vector2 screenCenter = { GetScreenWidth() / 2, GetScreenHeight() / 2 };
+    Ray ray = GetScreenToWorldRay( screenCenter, gw->camera );
+    gw->targetBlock = mapRaycast( gw->map, ray, 64.0f );
+
 }
 
 /**
@@ -167,11 +173,15 @@ void drawGameWorld( GameWorld *gw ) {
     ClearBackground( SKYBLUE );
 
     BeginMode3D( gw->camera );
+
     gw->map->draw( gw->map, &gw->camera );
     gw->player->draw( gw->player );
+    drawTargetBlockHighlighting( gw );
     DrawGrid( 100, 1 );
+
     EndMode3D();
 
+    drawCrosshair();
     DrawFPS( 10, 10 );
 
     EndDrawing();
@@ -198,5 +208,29 @@ void updateCamera( Camera3D *camera, Player *player ) {
     };
 
     camera->target = player->pos;
+
+}
+
+static void drawTargetBlockHighlighting( GameWorld *gw ) {
+
+    if ( gw->targetBlock.hit ) {
+        Vector3 c = {
+            gw->map->pos.x + gw->map->blockSize * gw->targetBlock.j,
+            gw->map->pos.y + gw->map->blockSize * gw->targetBlock.la,
+            gw->map->pos.z + gw->map->blockSize * gw->targetBlock.i
+        };
+        float s = gw->map->blockSize * 1.02f;
+        DrawCubeWires( c, s, s, s, YELLOW );
+    }
+
+}
+
+static void drawCrosshair( void ) {
+
+    int cx = GetScreenWidth() / 2;
+    int cy = GetScreenHeight() / 2;
+
+    DrawLine( cx - 8, cy, cx + 8, cy, BLACK );
+    DrawLine( cx, cy - 8, cx, cy + 8, BLACK );
 
 }

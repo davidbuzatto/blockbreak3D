@@ -16,6 +16,7 @@ typedef struct GameWorld {
     Map *map;
     Player *player;
     Camera3D camera;
+    RayHit targetBlock;
 } GameWorld;
 
 /**
