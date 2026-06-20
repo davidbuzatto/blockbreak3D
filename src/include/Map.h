@@ -105,6 +105,8 @@ void destroyMap( Map *map );
  */
 int breakBlock( Map *map, int la, int i, int j );
 
+bool placeBlock( Map *map, int la, int i, int j, Color color );
+
 /**
  * @brief Returns true if an axis-aligned box (centered at 'center', with the
  *        given 'size') overlaps any solid block. Used for player collision.

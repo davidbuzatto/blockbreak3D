@@ -27,6 +27,7 @@ static const float CAMERA_DISTANCE_MAX   = 40.0f;   // farthest zoom
 static const float CAMERA_STICK_DEADZONE = 0.1f;    // ignore tiny left-stick noise
 
 static const float PLAYER_REACH = 8.0f;    // how far player can target/break blocks
+static const int BUILD_COST = 1;           // materials spent to place on block
 
 // orbit camera state (spherical coordinates around the player)
 float cameraYaw      = 90.0f;   // horizontal angle (deg)
@@ -163,6 +164,33 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) ) {
         gw->player->availableMaterials += breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
+    }
+
+    if ( gw->targetBlock.hit && gw->player->availableMaterials >= BUILD_COST &&
+        ( IsMouseButtonPressed( MOUSE_BUTTON_RIGHT ) || IsKeyPressed( KEY_C ) ||
+          ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_LEFT_TRIGGER_2 ) ) ) ) {
+        
+        int pla = gw->targetBlock.pla;
+        int pi  = gw->targetBlock.pi;
+        int pj  = gw->targetBlock.pj;
+
+        Vector3 bc = {
+            gw->map->pos.x + gw->map->blockSize * pj,
+            gw->map->pos.y + gw->map->blockSize * pla,
+            gw->map->pos.z + gw->map->blockSize * pi
+        };
+
+        Vector3 d = gw->player->dim;
+        float bs = gw->map->blockSize;
+        bool overlapsPlayer =
+            fabsf( bc.x - gw->player->pos.x ) < ( bs + d.x ) * 0.5f &&
+            fabsf( bc.y - gw->player->pos.y ) < ( bs + d.y ) * 0.5f &&
+            fabsf( bc.z - gw->player->pos.z ) < ( bs + d.z ) * 0.5f;
+
+        if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, DARKBROWN ) ) {
+            gw->player->availableMaterials -= BUILD_COST;
+        }
+
     }
 
 }

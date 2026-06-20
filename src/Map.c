@@ -127,6 +127,7 @@ static void rebuildChunk( Map *map, int chunkIndex );
 static Frustum extractFrustum( Camera3D *camera );
 static bool boxInFrustum( Frustum *f, Vector3 min, Vector3 max );
 static void chunkBounds( Map *map, Chunk *ch, Vector3 *min, Vector3 *max );
+static void refreshGeometryAfterEdit( Map *map, int i, int j );
 
 /* five interchangeable rendering strategies; pick one in createMap(). */
 static void drawNaive( Map *map, Camera3D *camera );
@@ -263,52 +264,37 @@ int breakBlock( Map *map, int la, int i, int j ) {
     map->blocks[p].broken = true;
 
     // 2) update the geometry for the active strategy.
-    switch ( mapStrategy ) {
-
-        case MAP_STRATEGY_NAIVE:
-        case MAP_STRATEGY_CULLED:
-            // these read the block array every frame; nothing to rebuild.
-            break;
-
-        case MAP_STRATEGY_MESH:
-            // one giant mesh: the only option is to rebuild it whole (slow!).
-            UnloadMesh( map->mesh );
-            buildMesh( map );
-            break;
-
-        case MAP_STRATEGY_CHUNKED:
-        case MAP_STRATEGY_CHUNKED_FRUSTUM: {
-
-                // always rebuild the chunk that owns this block.
-                rebuildChunk( map, chunkIndexAt( map, i, j ) );
-
-                // if the block sits on a chunk border, the neighbor chunk across
-                // that border also needs rebuilding (one of ITS blocks just got a
-                // newly exposed face). Only horizontal borders matter, because
-                // chunks span the full height.
-                int li = i % CHUNK_SIZE;   // local row inside the chunk
-                int lj = j % CHUNK_SIZE;   // local column inside the chunk
-
-                if ( li == 0 ) {
-                    rebuildChunk( map, chunkIndexAt( map, i - 1, j ) );
-                }
-                if ( li == CHUNK_SIZE - 1 ) {
-                    rebuildChunk( map, chunkIndexAt( map, i + 1, j ) );
-                }
-                if ( lj == 0 ) {
-                    rebuildChunk( map, chunkIndexAt( map, i, j - 1 ) );
-                }
-                if ( lj == CHUNK_SIZE - 1 ) {
-                    rebuildChunk( map, chunkIndexAt( map, i, j + 1 ) );
-                }
-
-            }
-
-            break;
-
-    }
+    refreshGeometryAfterEdit( map, i, j );
 
     return materialsToAquire;
+
+}
+
+bool placeBlock( Map *map, int la, int i, int j, Color color ) {
+
+    // is a valid cell (bound checking)...
+    if ( la < 0 || la >= map->layers ||
+         i  < 0 || la >= map->rows ||
+         j  < 0 || la >= map->cols ) {
+        return false;
+    }
+
+    int p = la * ( map->rows * map->cols ) + i * map->cols + j;
+
+    // ... and is currently air.
+    if ( !map->blocks[p].broken ) {
+        return false;
+    }
+
+    // turn it solid.
+    map->blocks[p].broken = false;
+    map->blocks[p].color = color;
+    map->blocks[p].hits = 0;
+    map->blocks[p].hitsToBreak = 1;
+    map->blocks[p].materialsToAquire = 1;
+
+    refreshGeometryAfterEdit( map, i, j );
+    return true;
 
 }
 
@@ -907,6 +893,55 @@ static void chunkBounds( Map *map, Chunk *ch, Vector3 *min, Vector3 *max ) {
     // Y spans the full world height (chunks are full-height).
     min->y = map->pos.y - hs;
     max->y = map->pos.y + map->blockSize * ( map->layers - 1 ) + hs;
+
+}
+
+static void refreshGeometryAfterEdit( Map *map, int i, int j ) {
+
+    switch ( mapStrategy ) {
+
+        case MAP_STRATEGY_NAIVE:
+        case MAP_STRATEGY_CULLED:
+            // these read the block array every frame; nothing to rebuild.
+            break;
+
+        case MAP_STRATEGY_MESH:
+            // one giant mesh: the only option is to rebuild it whole (slow!).
+            UnloadMesh( map->mesh );
+            buildMesh( map );
+            break;
+
+        case MAP_STRATEGY_CHUNKED:
+        case MAP_STRATEGY_CHUNKED_FRUSTUM: {
+
+                // always rebuild the chunk that owns this block.
+                rebuildChunk( map, chunkIndexAt( map, i, j ) );
+
+                // if the block sits on a chunk border, the neighbor chunk across
+                // that border also needs rebuilding (one of ITS blocks just got a
+                // newly exposed face). Only horizontal borders matter, because
+                // chunks span the full height.
+                int li = i % CHUNK_SIZE;   // local row inside the chunk
+                int lj = j % CHUNK_SIZE;   // local column inside the chunk
+
+                if ( li == 0 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i - 1, j ) );
+                }
+                if ( li == CHUNK_SIZE - 1 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i + 1, j ) );
+                }
+                if ( lj == 0 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i, j - 1 ) );
+                }
+                if ( lj == CHUNK_SIZE - 1 ) {
+                    rebuildChunk( map, chunkIndexAt( map, i, j + 1 ) );
+                }
+
+            }
+
+            break;
+
+    }
 
 }
 
