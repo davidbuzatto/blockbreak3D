@@ -356,28 +356,47 @@ bool mapBoxCollides( Map *map, Vector3 center, Vector3 size ) {
 
 }
 
+/**
+ * @brief Marches a ray through the voxel grid (Amanatides & Woo DDA) and returns
+ *        the first solid block hit within maxDistance.
+ *
+ * Walks cell to cell, each step crossing whichever axis boundary (X/Y/Z) is
+ * nearest along the ray. It also remembers the previous cell, so the result
+ * carries the empty neighbor across the hit face (used later to place blocks).
+ *
+ * @param map          The map.
+ * @param ray          World-space ray (origin + direction).
+ * @param maxDistance  How far (world units) to march before giving up.
+ * @return A RayHit (.hit == false when nothing was hit).
+ */
 RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
 
-    RayHit result = { 0 };
+    RayHit result = { 0 };   // .hit == false (no hit) by default
 
     Vector3 d = Vector3Normalize( ray.direction );
 
+    // ray origin in "shifted" grid coords: block centers sit on integers + 0.5,
+    // so a cell spans [c, c+1] here and floor() yields its index.
     float gx = ( ray.position.x - map->pos.x ) / map->blockSize + 0.5f;
     float gy = ( ray.position.y - map->pos.y ) / map->blockSize + 0.5f;
     float gz = ( ray.position.z - map->pos.z ) / map->blockSize + 0.5f;
 
+    // starting cell (X=j, Y=la, Z=i)
     int j  = (int) floorf( gx );
     int la = (int) floorf( gy );
     int i  = (int) floorf( gz );
 
+    // step direction on each axis (+1 / -1)
     int stepX = d.x >= 0.0f ? 1 : -1;
     int stepY = d.y >= 0.0f ? 1 : -1;
     int stepZ = d.z >= 0.0f ? 1 : -1;
 
+    // world distance to cross one full cell on each axis (INF if not moving on it)
     float tDeltaX = d.x != 0.0f ? map->blockSize / fabsf( d.x ) : INFINITY;
     float tDeltaY = d.y != 0.0f ? map->blockSize / fabsf( d.y ) : INFINITY;
     float tDeltaZ = d.z != 0.0f ? map->blockSize / fabsf( d.z ) : INFINITY;
 
+    // world distance from the origin to the first cell boundary on each axis
     float tMaxX = INFINITY;
     float tMaxY = INFINITY;
     float tMaxZ = INFINITY;
@@ -409,6 +428,7 @@ RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
         tMaxZ *= tDeltaZ;
     }
 
+    // the cell we came FROM (the empty neighbor where a placed block would go)
     int pj = j;
     int pla = la;
     int pi = i;
@@ -417,6 +437,7 @@ RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
 
     while ( t <= maxDistance ) {
 
+        // first solid block along the ray? report it (plus the previous cell).
         if ( isSolid( map, la, i, j ) ) {
             result.hit = true;
             result.la  = la;
@@ -428,6 +449,7 @@ RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
             return result;
         }
 
+        // remember this cell, then advance across the nearest axis boundary.
         pj = j;
         pla = la;
         pi = i;

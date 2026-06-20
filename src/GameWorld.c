@@ -158,6 +158,8 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     // place the camera based on the (possibly updated) player position.
     updateCamera( &gw->camera, gw->player );
 
+    // raycast from the screen center (crosshair) to find the aimed block.
+    // 64 = how far the crosshair "sees"; a player-distance reach comes in 2.2.
     Vector2 screenCenter = { GetScreenWidth() / 2, GetScreenHeight() / 2 };
     Ray ray = GetScreenToWorldRay( screenCenter, gw->camera );
     gw->targetBlock = mapRaycast( gw->map, ray, 64.0f );
@@ -211,20 +213,30 @@ void updateCamera( Camera3D *camera, Player *player ) {
 
 }
 
+/**
+ * @brief Draws a wireframe box around the block currently under the crosshair.
+ */
 static void drawTargetBlockHighlighting( GameWorld *gw ) {
 
     if ( gw->targetBlock.hit ) {
+
+        // world center of the hit block (grid coords -> world).
         Vector3 c = {
             gw->map->pos.x + gw->map->blockSize * gw->targetBlock.j,
             gw->map->pos.y + gw->map->blockSize * gw->targetBlock.la,
             gw->map->pos.z + gw->map->blockSize * gw->targetBlock.i
         };
+
+        // slightly enlarged so the wires don't z-fight with the block's faces.
         float s = gw->map->blockSize * 1.02f;
         DrawCubeWires( c, s, s, s, YELLOW );
     }
 
 }
 
+/**
+ * @brief Draws a small 2D crosshair at the center of the screen.
+ */
 static void drawCrosshair( void ) {
 
     int cx = GetScreenWidth() / 2;

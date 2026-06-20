@@ -71,14 +71,20 @@ struct Chunk {
     Mesh mesh;
 };
 
+/**
+ * @brief Result of a voxel raycast (see mapRaycast).
+ *
+ * (la, i, j) is the first solid block the ray hit; (pla, pi, pj) is the empty
+ * cell just before it, across the hit face — where a new block would be placed.
+ */
 struct RayHit {
-    int hit;
-    int la;
-    int i;
-    int j;
-    int pla;
-    int pi;
-    int pj;
+    bool hit;    // true if a solid block was hit within range, false otherwise
+    int la;      // hit block: layer (Y)
+    int i;       // hit block: row (Z)
+    int j;       // hit block: column (X)
+    int pla;     // empty cell across the hit face: layer (Y) — where to place
+    int pi;      // empty cell across the hit face: row (Z)
+    int pj;      // empty cell across the hit face: column (X)
 };
 
 /**
@@ -104,4 +110,8 @@ void breakBlock( Map *map, int la, int i, int j );
  */
 bool mapBoxCollides( Map *map, Vector3 center, Vector3 size );
 
+/**
+ * @brief Marches 'ray' through the voxel grid (DDA) and returns the first solid
+ *        block hit within 'maxDistance' (RayHit.hit == 0 if none).
+ */
 RayHit mapRaycast( Map *map, Ray ray, float maxDistance );
