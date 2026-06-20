@@ -136,11 +136,13 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     updateCamera( &gw->camera, gw->player );
 
     // raycast from the screen center (crosshair) to find the aimed block.
-    // 64 = how far the crosshair "sees"; a player-distance reach comes in 2.2.
+    // 64 = how far the crosshair "sees"; the player's reach is applied below.
     Vector2 screenCenter = { GetScreenWidth() / 2, GetScreenHeight() / 2 };
     Ray ray = GetScreenToWorldRay( screenCenter, gw->camera );
     gw->targetBlock = mapRaycast( gw->map, ray, 64.0f );
 
+    // drop the target if it's beyond the player's reach, so the highlight and
+    // breaking stay consistent (you can only target what you can reach).
     if ( gw->targetBlock.hit ) {
 
         Vector3 blockCenter = {
@@ -155,7 +157,8 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 
     }
 
-    if ( gw->targetBlock.hit && 
+    // break the aimed block instantly (left mouse / B key / gamepad right trigger).
+    if ( gw->targetBlock.hit &&
         ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) ) {
         breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
