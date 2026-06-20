@@ -26,6 +26,8 @@ static const float CAMERA_DISTANCE_MIN   = 3.0f;    // closest zoom
 static const float CAMERA_DISTANCE_MAX   = 40.0f;   // farthest zoom
 static const float CAMERA_STICK_DEADZONE = 0.1f;    // ignore tiny left-stick noise
 
+static const float PLAYER_REACH = 8.0f;    // how far player can target/break blocks
+
 // orbit camera state (spherical coordinates around the player)
 float cameraYaw      = 90.0f;   // horizontal angle (deg)
 float cameraPitch    = 30.0f;   // vertical angle (deg)
@@ -84,31 +86,6 @@ void destroyGameWorld( GameWorld *gw ) {
  */
 void updateGameWorld( GameWorld *gw, float delta ) {
 
-    // breakBlock test (break blocks that are below the player)
-    if ( IsKeyPressed( KEY_B ) ) {
-
-        Map *map = gw->map;
-        
-        //int i = map->rows / 2;
-        //int j = map->cols / 2;
-        
-        int j = (int) roundf( ( gw->player->pos.x - map->pos.x ) / map->blockSize );
-        int i = (int) roundf( ( gw->player->pos.z - map->pos.z ) / map->blockSize );
-
-        // only act if the player is actually over the map.
-        if ( i >= 0 && i < map->rows && j >= 0 && j < map->cols ) {
-            // scan top-down for the highest solid block in the column and break it.
-            for ( int la = map->layers - 1; la >= 0; la-- ) {
-                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
-                if ( !map->blocks[p].broken ) {
-                    breakBlock( map, la, i, j );
-                    break;
-                }
-            }
-        }
-
-    }
-
     // --- orbit camera controls (keyboard) ---
     bool rightDown = IsKeyDown( KEY_RIGHT );
     bool leftDown = IsKeyDown( KEY_LEFT );
@@ -163,6 +140,26 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     Vector2 screenCenter = { GetScreenWidth() / 2, GetScreenHeight() / 2 };
     Ray ray = GetScreenToWorldRay( screenCenter, gw->camera );
     gw->targetBlock = mapRaycast( gw->map, ray, 64.0f );
+
+    if ( gw->targetBlock.hit ) {
+
+        Vector3 blockCenter = {
+            gw->map->pos.x + gw->map->blockSize * gw->targetBlock.j,
+            gw->map->pos.y + gw->map->blockSize * gw->targetBlock.la,
+            gw->map->pos.z + gw->map->blockSize * gw->targetBlock.i
+        };
+
+        if ( Vector3Distance( gw->player->pos, blockCenter ) > PLAYER_REACH ) {
+            gw->targetBlock.hit = false;
+        }
+
+    }
+
+    if ( gw->targetBlock.hit && 
+        ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
+          ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) ) {
+        breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
+    }
 
 }
 
@@ -221,7 +218,7 @@ static void drawTargetBlockHighlighting( GameWorld *gw ) {
     if ( gw->targetBlock.hit ) {
 
         // world center of the hit block (grid coords -> world).
-        Vector3 c = {
+        Vector3 blockCenter = {
             gw->map->pos.x + gw->map->blockSize * gw->targetBlock.j,
             gw->map->pos.y + gw->map->blockSize * gw->targetBlock.la,
             gw->map->pos.z + gw->map->blockSize * gw->targetBlock.i
@@ -229,7 +226,7 @@ static void drawTargetBlockHighlighting( GameWorld *gw ) {
 
         // slightly enlarged so the wires don't z-fight with the block's faces.
         float s = gw->map->blockSize * 1.02f;
-        DrawCubeWires( c, s, s, s, YELLOW );
+        DrawCubeWires( blockCenter, s, s, s, YELLOW );
     }
 
 }
