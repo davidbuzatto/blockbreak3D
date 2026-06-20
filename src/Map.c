@@ -270,12 +270,18 @@ int breakBlock( Map *map, int la, int i, int j ) {
 
 }
 
+/**
+ * @brief Places a solid block of 'color' at the (empty) cell (la, i, j) and
+ *        refreshes the geometry. Returns false if the cell is out of bounds or
+ *        already solid, so the caller only spends material on a real placement.
+ *        (pos/dim were already set for every cell by fillMap.)
+ */
 bool placeBlock( Map *map, int la, int i, int j, Color color ) {
 
     // is a valid cell (bound checking)...
     if ( la < 0 || la >= map->layers ||
-         i  < 0 || la >= map->rows ||
-         j  < 0 || la >= map->cols ) {
+         i  < 0 || i  >= map->rows ||
+         j  < 0 || j  >= map->cols ) {
         return false;
     }
 
@@ -896,6 +902,11 @@ static void chunkBounds( Map *map, Chunk *ch, Vector3 *min, Vector3 *max ) {
 
 }
 
+/**
+ * @brief Refreshes the rendered geometry after a block in column (i, j) changed
+ *        (broken or placed), per the active render strategy. Shared by
+ *        breakBlock and placeBlock.
+ */
 static void refreshGeometryAfterEdit( Map *map, int i, int j ) {
 
     switch ( mapStrategy ) {

@@ -166,6 +166,8 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         gw->player->availableMaterials += breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
     }
 
+    // place a block on the empty cell next to the aimed block (right mouse / C /
+    // gamepad left trigger), if we have material and the spot isn't the player.
     if ( gw->targetBlock.hit && gw->player->availableMaterials >= BUILD_COST &&
         ( IsMouseButtonPressed( MOUSE_BUTTON_RIGHT ) || IsKeyPressed( KEY_C ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_LEFT_TRIGGER_2 ) ) ) ) {
@@ -174,12 +176,14 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         int pi  = gw->targetBlock.pi;
         int pj  = gw->targetBlock.pj;
 
+        // world center of the cell we'd fill.
         Vector3 bc = {
             gw->map->pos.x + gw->map->blockSize * pj,
             gw->map->pos.y + gw->map->blockSize * pla,
             gw->map->pos.z + gw->map->blockSize * pi
         };
 
+        // AABB overlap test: don't place a block inside the player.
         Vector3 d = gw->player->dim;
         float bs = gw->map->blockSize;
         bool overlapsPlayer =
