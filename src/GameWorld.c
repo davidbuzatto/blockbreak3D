@@ -29,10 +29,16 @@ static const float CAMERA_STICK_DEADZONE = 0.1f;    // ignore tiny left-stick no
 static const float PLAYER_REACH = 8.0f;    // how far player can target/break blocks
 static const int BUILD_COST = 1;           // materials spent to place on block
 
+static const float MOUSE_SENSITIVITY        = 0.1f;   // degrees of look per pixel of mouse movement
+static const float FP_PITCH_LIMIT           = 89.0f;  // first-person up/down look limit (deg)
+static const float EYE_OFFSET_FACTOR        = 0.4f;   // eye height above the player center (× dim.y)
+static const bool  GAMEPAD_INVERT_CAMERA_Y  = true;   // invert the gamepad camera Y (right stick)
+
 // orbit camera state (spherical coordinates around the player)
-float cameraYaw      = 90.0f;   // horizontal angle (deg)
-float cameraPitch    = 30.0f;   // vertical angle (deg)
-float cameraDistance = 10.0f;   // orbit radius (world units)
+static float cameraYaw      = 90.0f;   // horizontal angle (deg)
+static float cameraPitch    = 30.0f;   // vertical angle (deg)
+static float cameraDistance = 10.0f;   // orbit radius (world units)
+static bool firstPerson     = true;    // start in first person; toggle to 3rd for debug
 
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );
@@ -66,6 +72,10 @@ GameWorld *createGameWorld( void ) {
     gw->camera.fovy = 60.0f;
     gw->camera.projection = CAMERA_PERSPECTIVE;
 
+    if ( firstPerson ) {
+        DisableCursor();
+    }
+
     return gw;
 
 }
@@ -88,13 +98,25 @@ void destroyGameWorld( GameWorld *gw ) {
  */
 void updateGameWorld( GameWorld *gw, float delta ) {
 
-    // --- orbit camera controls (keyboard) ---
+    // toggle first / third person (F5 or gamepad start).
+    // third person is for debug.
+    if ( IsKeyPressed( KEY_F5 ) || ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_MIDDLE_RIGHT ) ) ) {
+        firstPerson = !firstPerson;
+        if ( firstPerson ) {
+            DisableCursor();   // lock cursor for mouse-look
+        } else {
+            EnableCursor();    // free cursor in debug view
+        }
+    }
+    
+    // --- camera look: arrows / right stick / mouse all adjust yaw & pitch ---
+    // pitch convention: larger pitch = looking more downward.
     bool rightDown = IsKeyDown( KEY_RIGHT );
-    bool leftDown = IsKeyDown( KEY_LEFT );
-    bool upDown = IsKeyDown( KEY_UP );
-    bool downDown = IsKeyDown( KEY_DOWN );
+    bool leftDown  = IsKeyDown( KEY_LEFT );
+    bool upDown    = IsKeyDown( KEY_UP );
+    bool downDown  = IsKeyDown( KEY_DOWN );
 
-    // yaw: orbit left / right
+    // yaw: turn right / left
     if ( rightDown ) {
         cameraYaw += CAMERA_YAW_SPEED * delta;
     }
@@ -102,15 +124,15 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         cameraYaw -= CAMERA_YAW_SPEED * delta;
     }
 
-    // pitch: orbit up / down, clamped so the camera never flips or goes underground
+    // pitch: up arrow looks up (pitch decreases), down arrow looks down.
     if ( upDown ) {
-        cameraPitch += CAMERA_PITCH_SPEED * delta;
-    }
-    if ( downDown ) {
         cameraPitch -= CAMERA_PITCH_SPEED * delta;
     }
+    if ( downDown ) {
+        cameraPitch += CAMERA_PITCH_SPEED * delta;
+    }
 
-    // use gamepad only if none of the keys are down
+    // gamepad right stick (only when no arrow is held)
     if ( IsGamepadAvailable( 0 ) && !rightDown && !leftDown && !upDown && !downDown ) {
         float rightAnalogX = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_RIGHT_X );
         float rightAnalogY = GetGamepadAxisMovement( 0, GAMEPAD_AXIS_RIGHT_Y );
@@ -118,11 +140,26 @@ void updateGameWorld( GameWorld *gw, float delta ) {
             cameraYaw += CAMERA_YAW_SPEED * delta * rightAnalogX;
         }
         if ( rightAnalogY < -CAMERA_STICK_DEADZONE || rightAnalogY > CAMERA_STICK_DEADZONE ) {
-            cameraPitch -= CAMERA_PITCH_SPEED * delta * rightAnalogY; // invert y axis
+            // by default stick down (+Y) = look down; GAMEPAD_INVERT_Y flips it.
+            float invertY = GAMEPAD_INVERT_CAMERA_Y ? -1.0f : 1.0f;
+            cameraPitch += CAMERA_PITCH_SPEED * delta * rightAnalogY * invertY;
         }
+
     }
 
-    cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
+    // mouse-look (first person only; the cursor is locked)
+    if ( firstPerson ) {
+        Vector2 mouseDelta = GetMouseDelta();
+        cameraYaw   += mouseDelta.x * MOUSE_SENSITIVITY;
+        cameraPitch += mouseDelta.y * MOUSE_SENSITIVITY; // mouse down (+Y) = look down
+    }
+
+    // clamp pitch: wide range in first person, "above ground" range in third.
+    if ( firstPerson ) {
+        cameraPitch = Clamp( cameraPitch, -FP_PITCH_LIMIT, FP_PITCH_LIMIT );
+    } else {
+        cameraPitch = Clamp( cameraPitch, CAMERA_PITCH_MIN, CAMERA_PITCH_MAX );
+    }
 
     // distance: zoom with the mouse wheel, clamped
     cameraDistance -= GetMouseWheelMove() * CAMERA_ZOOM_STEP;
@@ -210,7 +247,9 @@ void drawGameWorld( GameWorld *gw ) {
     BeginMode3D( gw->camera );
 
     gw->map->draw( gw->map, &gw->camera );
-    gw->player->draw( gw->player );
+    if ( !firstPerson ) {
+        gw->player->draw( gw->player );   // hidden in first person (camera is inside it)
+    }
     drawTargetBlockHighlighting( gw );
     DrawGrid( 100, 1 );
 
@@ -229,20 +268,40 @@ void drawGameWorld( GameWorld *gw ) {
  */
 void updateCamera( Camera3D *camera, Player *player ) {
 
-    // spherical orbit: turn yaw/pitch/distance into an offset from the player.
     float yaw   = cameraYaw * DEG2RAD;
     float pitch = cameraPitch * DEG2RAD;
 
-    float horizontal = cameraDistance * cosf( pitch );  // radius projected on XZ
-    float height     = cameraDistance * sinf( pitch );  // vertical part of the radius
-
-    camera->position = (Vector3) { 
-        player->pos.x + horizontal * cosf( yaw ), 
-        player->pos.y + height, 
-        player->pos.z + horizontal * sinf( yaw ), 
+    // forward look direction, shared by both modes (larger pitch = more downward).
+    Vector3 forward = {
+        -cosf( pitch ) * cosf( yaw ),
+        -sinf( pitch ),
+        -cosf( pitch ) * sinf( yaw )
     };
 
-    camera->target = player->pos;
+    if ( firstPerson ) {
+
+        // camera at the player's eyes, looking forward.
+        Vector3 eye = {
+            player->pos.x,
+            player->pos.y + player->dim.y * EYE_OFFSET_FACTOR,
+            player->pos.z
+        };
+        camera->position = eye;
+        camera->target = Vector3Add( eye, forward );
+
+    } else {
+
+        // third person: orbit behind/above, looking at the player.
+        float horizontal = cameraDistance * cosf( pitch );
+        float height     = cameraDistance * sinf( pitch );
+        camera->position = (Vector3) {
+            player->pos.x + horizontal * cosf( yaw ),
+            player->pos.y + height,
+            player->pos.z + horizontal * sinf( yaw )
+        };
+        camera->target = player->pos;
+
+    }
 
 }
 
