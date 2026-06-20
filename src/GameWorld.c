@@ -72,6 +72,7 @@ GameWorld *createGameWorld( void ) {
     gw->camera.fovy = 60.0f;
     gw->camera.projection = CAMERA_PERSPECTIVE;
 
+    // start in first person, so lock the cursor right away for mouse-look.
     if ( firstPerson ) {
         DisableCursor();
     }
@@ -140,7 +141,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
             cameraYaw += CAMERA_YAW_SPEED * delta * rightAnalogX;
         }
         if ( rightAnalogY < -CAMERA_STICK_DEADZONE || rightAnalogY > CAMERA_STICK_DEADZONE ) {
-            // by default stick down (+Y) = look down; GAMEPAD_INVERT_Y flips it.
+            // by default stick down (+Y) = look down; GAMEPAD_INVERT_CAMERA_Y flips it.
             float invertY = GAMEPAD_INVERT_CAMERA_Y ? -1.0f : 1.0f;
             cameraPitch += CAMERA_PITCH_SPEED * delta * rightAnalogY * invertY;
         }
@@ -263,8 +264,9 @@ void drawGameWorld( GameWorld *gw ) {
 }
 
 /**
- * @brief Positions the camera on a sphere around the player from the current
- *        yaw / pitch / distance, looking back at the player.
+ * @brief Positions the camera from the current yaw/pitch (a shared forward look
+ *        direction). First person: at the player's eyes, looking forward. Third
+ *        person: orbiting behind/above at cameraDistance, looking at the player.
  */
 void updateCamera( Camera3D *camera, Player *player ) {
 
