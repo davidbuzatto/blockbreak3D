@@ -52,8 +52,9 @@ typedef enum {
     MAP_STRATEGY_NAIVE,           // block by block
     MAP_STRATEGY_CULLED,          // block by block with face culling
     MAP_STRATEGY_MESH,            // one mesh
-    MAP_STRATEGY_CHUNKED,          // mesh chunks
-    MAP_STRATEGY_CHUNKED_FRUSTUM  // mesh chunks + frustum culling
+    MAP_STRATEGY_CHUNKED,         // mesh chunks
+    MAP_STRATEGY_CHUNKED_FRUSTUM, // mesh chunks + frustum culling
+    MAP_STRATEGY_TEXTURED,        // mesh chunks + frustum culling + map with textures
 } MapStrategy;
 
 /** @brief Selected map build + render strategy (change here to switch). */
