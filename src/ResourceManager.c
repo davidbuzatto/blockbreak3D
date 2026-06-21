@@ -35,7 +35,7 @@ void loadResourcesResourceManager( void ) {
     // equirectangular panorama, loaded as a GPU texture so genTextureCubemap can
     // render it onto the 6 cubemap faces. Our raylib build has no HDR support, so
     // we use a plain PNG panorama (not a .hdr file).
-    rm.skyPanorama = LoadTexture( "resources/images/raylib-example-sky-panorama.png" );
+    rm.skyPanorama = LoadTexture( "resources/images/sky-panorama.png" );
 
     rm.skyboxShader = LoadShader(
         TextFormat( "resources/shaders/glsl%i/skybox.vs", GLSL_VERSION ),
