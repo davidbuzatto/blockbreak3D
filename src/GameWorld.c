@@ -197,11 +197,17 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 
     }
 
+    if ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) ) {
+        playerSwingPickaxe( gw->player );
+    }
+
     // break the aimed block instantly (left mouse / B key / gamepad right trigger).
-    if ( gw->targetBlock.hit &&
-        ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
-          ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) ) {
-        gw->player->availableMaterials += breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
+    if ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
+          ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) {
+        playerSwingPickaxe( gw->player );
+        if ( gw->targetBlock.hit ) {
+            gw->player->availableMaterials += breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
+        }
     }
 
     // place a block on the empty cell next to the aimed block (right mouse / C /

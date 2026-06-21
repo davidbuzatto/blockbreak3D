@@ -25,6 +25,7 @@ struct Player {
     float facingAngle;      // direction the model faces (deg), follows movement.
     float modelScale;       // uniform scale to fit the model to the collision box.
     float pickaxeScale;     // uniform scale to fit the pickaxe to a target size.
+    float swingTimer;       // seconds to perform a swing
 
     Map *map;               // world the player moves and collides against.
     bool onGround;          // true when standing on a solid block (enables jump).
@@ -47,3 +48,5 @@ Player *createPlayer( float x, float y, float z, float width, float height, Colo
  * @brief Frees a player. Safe to call with NULL.
  */
 void destroyPlayer( Player *player );
+
+void playerSwingPickaxe( Player *player );

@@ -33,6 +33,12 @@ static const float PICKAXE_OFFSET_Z     = 0.45f;   // hand offset: forward (+) /
 static const float PICKAXE_ROT_X        = 94.0f;   // rotation around X (deg)
 static const float PICKAXE_ROT_Y        = -3.0f;   // rotation around Y (deg)
 static const float PICKAXE_ROT_Z        = 61.0f;   // rotation around Z (deg)
+static const float PICKAXE_GRIP_X       = -0.4f;   // swing pivot X
+static const float PICKAXE_GRIP_Y       = 0.0f;    // swing pivot Y
+static const float PICKAXE_GRIP_Z       = 0.4f;    // swing pivot Z
+
+static const float SWING_DURATION  = 0.25f;  // seconds for one full swing
+static const float SWING_AMPLITUDE = -70.0f;  // peek swing angle (deg)
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -102,6 +108,10 @@ void destroyPlayer( Player *player ) {
     }
 }
 
+void playerSwingPickaxe( Player *player ) {
+    player->swingTimer = SWING_DURATION;  // restart swing
+}
+
 /**
  * @brief Reads input: sets horizontal velocity (camera-relative) and triggers a
  *        jump. Vertical velocity is otherwise controlled by gravity in update().
@@ -133,6 +143,19 @@ static void input( Player *player ) {
     if ( IsKeyPressed( KEY_L ) ) {
         PICKAXE_OFFSET_Z += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
         trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_OFFSET_X, PICKAXE_OFFSET_Y, PICKAXE_OFFSET_Z );
+    }
+
+    if ( IsKeyPressed( KEY_J ) ) {
+        PICKAXE_GRIP_X += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
+    }
+    if ( IsKeyPressed( KEY_K ) ) {
+        PICKAXE_GRIP_Y += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
+    }
+    if ( IsKeyPressed( KEY_L ) ) {
+        PICKAXE_GRIP_Z += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
     }*/
 
     // movement intent on two camera-relative axes, -1..+1 each:
@@ -198,6 +221,14 @@ static void input( Player *player ) {
  * instead of skipping through it; landing snaps the feet onto the block top.
  */
 static void update( Player *player, float delta ) {
+
+    // --- tick down the pickaxe swing.
+    if ( player->swingTimer > 0.0f ) {
+        player->swingTimer -= delta;
+        if ( player->swingTimer < 0.0f ) {
+            player->swingTimer = 0.0f;
+        }
+    }
 
     // --- horizontal movement, one axis at a time so we can slide along walls ---
 
@@ -306,14 +337,30 @@ static void draw( Player *player ) {
         WHITE                                           // tint (WHITE keeps texture colors)
     );
 
+    float swingAngle = 0.0f;
+    if ( player->swingTimer > 0.0f ) {
+        float progress = 1.0f - player->swingTimer / SWING_DURATION;
+        swingAngle = sinf( progress * PI ) * SWING_AMPLITUDE;
+    }
+
     rlPushMatrix();
+
         rlTranslatef( player->pos.x, player->pos.y, player->pos.z );
         rlRotatef( player->facingAngle + MODEL_FACING_OFFSET, 0.0f, 1.0f, 0.0f );
         rlTranslatef( PICKAXE_OFFSET_X, PICKAXE_OFFSET_Y, PICKAXE_OFFSET_Z );
+        
         rlRotatef( PICKAXE_ROT_X, 1.0f, 0.0f, 0.0f );
         rlRotatef( PICKAXE_ROT_Y, 0.0f, 1.0f, 0.0f );
         rlRotatef( PICKAXE_ROT_Z, 0.0f, 0.0f, 1.0f );
+
+        // debug grip pivot
+        //rawSphere( (Vector3) { PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z }, 0.06f, RED );
+
+        rlTranslatef( PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
+        rlRotatef( swingAngle, 0.0f, 1.0f, 0.0f );
+        rlTranslatef( -PICKAXE_GRIP_X, -PICKAXE_GRIP_Y, -PICKAXE_GRIP_Z );
         DrawModel( rm.pickaxeModel, (Vector3) { 0 }, player->pickaxeScale, WHITE );
+
     rlPopMatrix();
 
     // debug: the collision box (player->dim) drawn around the model.
