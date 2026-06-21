@@ -117,11 +117,11 @@ typedef struct {
 
 /**
  * @brief An ore type seeded into the stone by 3D noise: where its noise exceeds
- *        'threashold', a stone block becomes this ore. fillMap() tests each one.
+ *        'threshold', a stone block becomes this ore. fillMap() tests each one.
  */
 typedef struct {
     float scale;             // vein frequency (higher = smaller, busier veins)
-    float threashold;        // rarity (higher = rarer)
+    float threshold;        // rarity (higher = rarer)
     float seed;              // coordinate offset; decorrelates it from other noises
     Color color;             // ore color
     int materialsToAquire;   // material yielded when broken
@@ -575,7 +575,7 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
                             2.0f, 0.5f, 4
                         );
 
-                        if ( oreNoise > ore.threashold ) {
+                        if ( oreNoise > ore.threshold ) {
                             color = ore.color;
                             materialsToAquire = ore.materialsToAquire;
                             break;
