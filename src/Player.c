@@ -156,6 +156,11 @@ void drawPlayerPickaxeViewmodel( Player *player, Camera3D *camera ) {
         swingAngle = sinf( progress * PI ) * SWING_AMPLITUDE;
     }
 
+    // draw the viewmodel ON TOP of the scene: flush the world (drawn with depth),
+    // then disable the depth test so nearby blocks don't clip the pickaxe.
+    rlDrawRenderBatchActive();
+    rlDisableDepthTest();
+
     rlPushMatrix();
 
         rlMultMatrixf( MatrixToFloat( viewModel ) );   // adopt the camera frame
@@ -173,6 +178,10 @@ void drawPlayerPickaxeViewmodel( Player *player, Camera3D *camera ) {
         DrawModel( rm.pickaxeModel, (Vector3) { 0 }, player->pickaxeScale, WHITE );
 
     rlPopMatrix();
+
+    // flush the viewmodel (still depth-test off), then restore the depth test.
+    rlDrawRenderBatchActive();
+    rlEnableDepthTest();
 
 }
 

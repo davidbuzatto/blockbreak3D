@@ -258,14 +258,17 @@ void drawGameWorld( GameWorld *gw ) {
 
     gw->map->draw( gw->map, &gw->camera );
 
+    // target highlight before the player/pickaxe, so the first-person viewmodel
+    // (drawn on top of the scene) is never covered by the highlight outline.
+    drawTargetBlockHighlighting( gw );
+
     if ( !firstPerson ) {
         gw->player->draw( gw->player );   // hidden in first person (camera is inside it)
     } else {
-        drawPlayerPickaxeViewmodel( gw->player, &gw->camera );
+        drawPlayerPickaxeViewmodel( gw->player, &gw->camera );   // draws only the pickaxe
     }
 
-    drawTargetBlockHighlighting( gw );
-    DrawGrid( 100, 1 );
+    //DrawGrid( 100, 1 );
 
     EndMode3D();
 
