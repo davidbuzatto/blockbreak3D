@@ -115,8 +115,16 @@ typedef struct {
     Vector4 planes[6];
 } Frustum;
 
+typedef struct {
+    float scale;
+    float threashold;
+    float seed;
+    Color color;
+    int materialsToAquire;
+} OreType;
+
 /* forward declarations of file-private (static) helpers. */
-static void fillMap( Map *map, float scale, float seed );
+static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int oreTypeCount );
 static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols );
 static void buildMesh( Map *map );
 static void buildChunks( Map *map );
@@ -173,8 +181,15 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     new->chunks = NULL;
     new->chunkCount = 0;
 
+    OreType oreTypes[] = {
+        { 0.14f, 0.45f, 900.0f, BLUE, 15 },    // gem (rarest, most valuable)
+        { 0.12f, 0.38f, 500.0f, GOLD, 8 },     // gold
+        { 0.10f, 0.30f, 200.0f, ORANGE, 3 },   // iron (most common)
+    };
+    int oreTypeCount = sizeof( oreTypes ) / sizeof( OreType );
+
     // generate the terrain (fills the block array).
-    fillMap( new, 0.05f, 0 );
+    fillMap( new, 0.05f, 0, oreTypes, oreTypeCount );
     //fillMap( new, 0.1f, GetRandomValue( 0, 10000 ) );
 
     // material is shared by every mesh-based strategy
@@ -487,7 +502,7 @@ RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
  *               larger = more jagged terrain.
  * @param seed   Offset added to the sample coordinates to vary the terrain.
  */
-static void fillMap( Map *map, float scale, float seed ) {
+static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int oreTypeCount ) {
 
     /*
      * Terrain vertical placement, independent of the total number of layers:
@@ -535,7 +550,28 @@ static void fillMap( Map *map, float scale, float seed ) {
                 } else if ( la >= h - 2 ) {
                     color = BROWN;
                 } else {
+
                     color = GRAY;
+
+                    for ( int o = 0; o < oreTypeCount; o++ ) {
+                        
+                        OreType ore = oreTypes[o];
+
+                        float oreNoise = stb_perlin_fbm_noise3(
+                            ( j + ore.seed ) * ore.scale,
+                            la * ore.scale,
+                            ( i + ore.seed ) * ore.scale,
+                            2.0f, 0.5f, 4
+                        );
+
+                        if ( oreNoise > ore.threashold ) {
+                            color = ore.color;
+                            materialsToAquire = ore.materialsToAquire;
+                            break;
+                        }
+
+                    }
+
                 }
 
                 // linear index of this block in the flat array.

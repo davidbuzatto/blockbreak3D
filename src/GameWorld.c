@@ -38,7 +38,7 @@ static const bool  GAMEPAD_INVERT_CAMERA_Y  = true;   // invert the gamepad came
 static float cameraYaw      = 90.0f;   // horizontal angle (deg)
 static float cameraPitch    = 30.0f;   // vertical angle (deg)
 static float cameraDistance = 10.0f;   // orbit radius (world units)
-static bool firstPerson     = true;    // start in first person; toggle to 3rd for debug
+static bool firstPerson     = false;    // start in first person; toggle to 3rd for debug
 
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );
@@ -52,8 +52,8 @@ GameWorld *createGameWorld( void ) {
 
     GameWorld *gw = (GameWorld*) malloc( sizeof( GameWorld ) );
 
-    int rows = 100;
-    int cols = 100;
+    int rows = 60;
+    int cols = 60;
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
