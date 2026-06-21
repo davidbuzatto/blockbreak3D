@@ -11,6 +11,7 @@
 
 typedef struct ResourceManager {
     Model playerModel;      // the player's 3D model (character-k.glb)
+    Model pickaxeModel;     // the pickaxe held by the player
 } ResourceManager;
 
 /**

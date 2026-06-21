@@ -24,6 +24,7 @@ struct Player {
     float cameraAngle;      // camera orbit angle (deg), set by GameWorld each frame.
     float facingAngle;      // direction the model faces (deg), follows movement.
     float modelScale;       // uniform scale to fit the model to the collision box.
+    float pickaxeScale;     // uniform scale to fit the pickaxe to a target size.
 
     Map *map;               // world the player moves and collides against.
     bool onGround;          // true when standing on a solid block (enables jump).

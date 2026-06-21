@@ -115,12 +115,16 @@ typedef struct {
     Vector4 planes[6];
 } Frustum;
 
+/**
+ * @brief An ore type seeded into the stone by 3D noise: where its noise exceeds
+ *        'threashold', a stone block becomes this ore. fillMap() tests each one.
+ */
 typedef struct {
-    float scale;
-    float threashold;
-    float seed;
-    Color color;
-    int materialsToAquire;
+    float scale;             // vein frequency (higher = smaller, busier veins)
+    float threashold;        // rarity (higher = rarer)
+    float seed;              // coordinate offset; decorrelates it from other noises
+    Color color;             // ore color
+    int materialsToAquire;   // material yielded when broken
 } OreType;
 
 /* forward declarations of file-private (static) helpers. */
@@ -181,6 +185,8 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     new->chunks = NULL;
     new->chunkCount = 0;
 
+    // ore types seeded into the stone, listed rarest-first so a rarer ore wins
+    // where veins overlap. (local array so the named Color macros are valid here.)
     OreType oreTypes[] = {
         { 0.14f, 0.45f, 900.0f, BLUE, 15 },    // gem (rarest, most valuable)
         { 0.12f, 0.38f, 500.0f, GOLD, 8 },     // gold
@@ -495,12 +501,15 @@ RayHit mapRaycast( Map *map, Ray ray, float maxDistance ) {
  *   - la <= h  -> solid block (visible terrain)
  *   - la >  h  -> "broken" block (air, never drawn)
  *
- * Block color is chosen by depth below the surface (grass / dirt / stone).
+ * Block color is chosen by depth below the surface (grass / dirt / stone), and
+ * stone blocks may become ore where an ore type's 3D noise is high enough.
  *
- * @param map    The map to fill.
- * @param scale  Horizontal noise frequency. Smaller = smoother, wider hills;
- *               larger = more jagged terrain.
- * @param seed   Offset added to the sample coordinates to vary the terrain.
+ * @param map          The map to fill.
+ * @param scale        Horizontal noise frequency. Smaller = smoother, wider
+ *                     hills; larger = more jagged terrain.
+ * @param seed         Offset added to the sample coordinates to vary the terrain.
+ * @param oreTypes     Ore types to seed into the stone (listed rarest-first).
+ * @param oreTypeCount Number of entries in oreTypes.
  */
 static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int oreTypeCount ) {
 
@@ -553,6 +562,8 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
 
                     color = GRAY;
 
+                    // ore veins: test each ore's own 3D noise; the first (rarest)
+                    // match wins, so overlapping veins give the more valuable ore.
                     for ( int o = 0; o < oreTypeCount; o++ ) {
                         
                         OreType ore = oreTypes[o];

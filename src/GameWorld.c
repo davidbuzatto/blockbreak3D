@@ -38,7 +38,7 @@ static const bool  GAMEPAD_INVERT_CAMERA_Y  = true;   // invert the gamepad came
 static float cameraYaw      = 90.0f;   // horizontal angle (deg)
 static float cameraPitch    = 30.0f;   // vertical angle (deg)
 static float cameraDistance = 10.0f;   // orbit radius (world units)
-static bool firstPerson     = false;    // start in first person; toggle to 3rd for debug
+static bool firstPerson     = false;   // camera mode: true = first person, false = third person
 
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );

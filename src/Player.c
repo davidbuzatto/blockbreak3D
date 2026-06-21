@@ -12,18 +12,27 @@
 
 #include "raylib/raylib.h"
 #include "raylib/raymath.h"
+#include "raylib/rlgl.h"
 
 #include "Macros.h"
 #include "Map.h"
 #include "Player.h"
 #include "ResourceManager.h"
 
-static const float GRAVITY = -25.0f;            // downward acceleration (units/s^2)
-static const float TERMINAL_VELOCITY = -50.0f;  // maximum fall speed (clamp)
-static const float JUMP_SPEED = 9.0f;           // initial upward velocity of a jump
-static const float MODEL_FACING_OFFSET = 0.0f;  // corrects the model's default facing
-static const float MAX_STEP_HEIGHT = 1.0f;      // tallest ledge the player auto-steps up
-static const float STICK_DEADZONE = 0.1f;       // ignore tiny left-stick noise
+static const float GRAVITY             = -25.0f;  // downward acceleration (units/s^2)
+static const float TERMINAL_VELOCITY   = -50.0f;  // maximum fall speed (clamp)
+static const float JUMP_SPEED          = 9.0f;    // initial upward velocity of a jump
+static const float MODEL_FACING_OFFSET = 0.0f;    // corrects the model's default facing
+static const float MAX_STEP_HEIGHT     = 1.0f;    // tallest ledge the player auto-steps up
+static const float STICK_DEADZONE      = 0.1f;    // ignore tiny left-stick noise
+
+static const float PICKAXE_TARGET_SCALE = 1.0f;   // desired world size (auto-scaled from the model)
+static const float PICKAXE_OFFSET_X     = -0.3f;   // hand offset: right (+) / left (-)
+static const float PICKAXE_OFFSET_Y     = 0.05f;   // hand offset: up (+) / down (-)
+static const float PICKAXE_OFFSET_Z     = 0.45f;   // hand offset: forward (+) / back (-)
+static const float PICKAXE_ROT_X        = 94.0f;   // rotation around X (deg)
+static const float PICKAXE_ROT_Y        = -3.0f;   // rotation around Y (deg)
+static const float PICKAXE_ROT_Z        = 61.0f;   // rotation around Z (deg)
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -59,6 +68,17 @@ Player *createPlayer( float x, float y, float z, float width, float height, Colo
     float modelHeight = bb.max.y - bb.min.y;
     new->modelScale = new->dim.y / modelHeight;
 
+    // scale the pickaxe so its largest dimension matches the PICKAXE_TARGET_SIZE.
+    BoundingBox pbb = GetModelBoundingBox( rm.pickaxeModel );
+    float pickaxeMax = fmaxf( 
+        pbb.max.x - pbb.min.x,
+        fmaxf(
+            pbb.max.y - pbb.min.y,
+            pbb.max.z - pbb.min.z
+        )
+    );
+    new->pickaxeScale = PICKAXE_TARGET_SCALE / pickaxeMax;
+
     new->map = NULL;
     new->onGround = false;
     new->availableMaterials = 200;
@@ -87,6 +107,33 @@ void destroyPlayer( Player *player ) {
  *        jump. Vertical velocity is otherwise controlled by gravity in update().
  */
 static void input( Player *player ) {
+
+    // pickaxe positioning
+    /*if ( IsKeyPressed( KEY_U ) ) {
+        PICKAXE_ROT_X += IsKeyDown( KEY_LEFT_CONTROL ) ? -1 : 1;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_ROT_X, PICKAXE_ROT_Y, PICKAXE_ROT_Z );
+    }
+    if ( IsKeyPressed( KEY_I ) ) {
+        PICKAXE_ROT_Y += IsKeyDown( KEY_LEFT_CONTROL ) ? -1 : 1;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_ROT_X, PICKAXE_ROT_Y, PICKAXE_ROT_Z );
+    }
+    if ( IsKeyPressed( KEY_O ) ) {
+        PICKAXE_ROT_Z += IsKeyDown( KEY_LEFT_CONTROL ) ? -1 : 1;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_ROT_X, PICKAXE_ROT_Y, PICKAXE_ROT_Z );
+    }
+
+    if ( IsKeyPressed( KEY_J ) ) {
+        PICKAXE_OFFSET_X += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_OFFSET_X, PICKAXE_OFFSET_Y, PICKAXE_OFFSET_Z );
+    }
+    if ( IsKeyPressed( KEY_K ) ) {
+        PICKAXE_OFFSET_Y += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_OFFSET_X, PICKAXE_OFFSET_Y, PICKAXE_OFFSET_Z );
+    }
+    if ( IsKeyPressed( KEY_L ) ) {
+        PICKAXE_OFFSET_Z += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_OFFSET_X, PICKAXE_OFFSET_Y, PICKAXE_OFFSET_Z );
+    }*/
 
     // movement intent on two camera-relative axes, -1..+1 each:
     //     strafe  = sideways,  forward = toward where the camera looks.
@@ -258,6 +305,16 @@ static void draw( Player *player ) {
         },
         WHITE                                           // tint (WHITE keeps texture colors)
     );
+
+    rlPushMatrix();
+        rlTranslatef( player->pos.x, player->pos.y, player->pos.z );
+        rlRotatef( player->facingAngle + MODEL_FACING_OFFSET, 0.0f, 1.0f, 0.0f );
+        rlTranslatef( PICKAXE_OFFSET_X, PICKAXE_OFFSET_Y, PICKAXE_OFFSET_Z );
+        rlRotatef( PICKAXE_ROT_X, 1.0f, 0.0f, 0.0f );
+        rlRotatef( PICKAXE_ROT_Y, 0.0f, 1.0f, 0.0f );
+        rlRotatef( PICKAXE_ROT_Z, 0.0f, 0.0f, 1.0f );
+        DrawModel( rm.pickaxeModel, (Vector3) { 0 }, player->pickaxeScale, WHITE );
+    rlPopMatrix();
 
     // debug: the collision box (player->dim) drawn around the model.
     //DrawCubeWiresV( player->pos, player->dim, BLACK );
