@@ -108,6 +108,9 @@ void destroyPlayer( Player *player ) {
     }
 }
 
+/**
+ * @brief Starts (or restarts) the pickaxe swing by resetting its timer.
+ */
 void playerSwingPickaxe( Player *player ) {
     player->swingTimer = SWING_DURATION;  // restart swing
 }
@@ -337,9 +340,10 @@ static void draw( Player *player ) {
         WHITE                                           // tint (WHITE keeps texture colors)
     );
 
+    // swing arc: sine gives a smooth 0 -> peak -> 0 over the swing (0 when idle).
     float swingAngle = 0.0f;
     if ( player->swingTimer > 0.0f ) {
-        float progress = 1.0f - player->swingTimer / SWING_DURATION;
+        float progress = 1.0f - player->swingTimer / SWING_DURATION;  // 0..1
         swingAngle = sinf( progress * PI ) * SWING_AMPLITUDE;
     }
 
@@ -356,6 +360,9 @@ static void draw( Player *player ) {
         // debug grip pivot
         //rawSphere( (Vector3) { PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z }, 0.06f, RED );
 
+        // swing about the grip: translate to the pivot, rotate, translate back.
+        // when swingAngle == 0 the two translations cancel, so the idle pose is
+        // untouched; mid-swing it pivots at the handle, not the model center.
         rlTranslatef( PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
         rlRotatef( swingAngle, 0.0f, 1.0f, 0.0f );
         rlTranslatef( -PICKAXE_GRIP_X, -PICKAXE_GRIP_Y, -PICKAXE_GRIP_Z );

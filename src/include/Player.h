@@ -49,4 +49,7 @@ Player *createPlayer( float x, float y, float z, float width, float height, Colo
  */
 void destroyPlayer( Player *player );
 
+/**
+ * @brief Starts a pickaxe swing animation (call when the player uses the tool).
+ */
 void playerSwingPickaxe( Player *player );
