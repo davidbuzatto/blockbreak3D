@@ -1,4 +1,2 @@
-Suavizar auto-step;
-Aplicar texturas nos blocos;
 Usar shader para iluminação?
 Criar skybox?

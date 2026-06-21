@@ -20,10 +20,14 @@ void loadResourcesResourceManager( void ) {
     rm.playerModel = LoadModel( "resources/models/player/character-k.glb" );
 
     rm.pickaxeModel = LoadModel( "resources/models/pickaxe/minecraft-diamond-pickaxe.glb" );
+
+    rm.blockTypeAtlas = LoadTexture( "resources/images/block-type-atlas.png" );
+    SetTextureFilter( rm.blockTypeAtlas, TEXTURE_FILTER_POINT );
     
 }
 
 void unloadResourcesResourceManager( void ) {
     UnloadModel( rm.playerModel );   // frees the mesh, material and textures
     UnloadModel( rm.pickaxeModel );
+    UnloadTexture( rm.blockTypeAtlas );
 }

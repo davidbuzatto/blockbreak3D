@@ -43,6 +43,8 @@
 #include "ResourceManager.h"
 
 #define CHUNK_SIZE 16
+#define ATLAS_COLS 4
+#define ATLAS_ROWS 4
 
 /**
  * @brief Defines the types of build strategies that can be used to create 
@@ -58,7 +60,7 @@ typedef enum {
 } MapStrategy;
 
 /** @brief Selected map build + render strategy (change here to switch). */
-static const MapStrategy mapStrategy = MAP_STRATEGY_CHUNKED_FRUSTUM;
+static const MapStrategy mapStrategy = MAP_STRATEGY_TEXTURED;
 
 /**
  * @brief Static description of one of the six faces of a cube.
@@ -89,22 +91,23 @@ typedef struct {
     int dj;
     float corners[4][3];
     float shade;
+    float uv[4][2];
 } CubeFace;
 
 /** @brief The six faces of a cube (neighbor offset, corners, shade). */
 static const CubeFace cubeFaces[6] = {
     // +X (right): neighbor at j+1
-    {  0,  0,  1, { {1,-1,-1}, {1,1,-1}, {1,1,1}, {1,-1,1} }, 0.8f },
+    {  0,  0,  1, { {1,-1,-1}, {1,1,-1}, {1,1,1}, {1,-1,1} }, 0.8f, { {0,1}, {0,0}, {1,0}, {1,1} } },
     // -X (left): neighbor at j-1
-    {  0,  0, -1, { {-1,-1,1}, {-1,1,1}, {-1,1,-1}, {-1,-1,-1} }, 0.65f },
+    {  0,  0, -1, { {-1,-1,1}, {-1,1,1}, {-1,1,-1}, {-1,-1,-1} }, 0.65f, { {0,1}, {0,0}, {1,0}, {1,1} } },
     // +Y (top): neighbor at la+1
-    {  1,  0,  0, { {-1,1,-1}, {-1,1,1}, {1,1,1}, {1,1,-1} }, 1.0f },
+    {  1,  0,  0, { {-1,1,-1}, {-1,1,1}, {1,1,1}, {1,1,-1} }, 1.0f, { {0,0}, {0,1}, {1,1}, {1,0} } },
     // -Y (bottom): neighbor at la-1
-    { -1,  0,  0, { {-1,-1,-1}, {1,-1,-1}, {1,-1,1}, {-1,-1,1} }, 0.5f },
+    { -1,  0,  0, { {-1,-1,-1}, {1,-1,-1}, {1,-1,1}, {-1,-1,1} }, 0.5f, { {0,0}, {1,0}, {1,1}, {0,1} } },
     // +Z (front): neighbor at i+1
-    {  0,  1,  0, { {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1} }, 0.75f },
+    {  0,  1,  0, { {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1} }, 0.75f, { {0,1}, {1,1}, {1,0}, {0,0} } },
     // -Z (back): neighbor at i-1
-    {  0, -1,  0, { {-1,-1,-1}, {-1,1,-1}, {1,1,-1}, {1,-1,-1} }, 0.6f },
+    {  0, -1,  0, { {-1,-1,-1}, {-1,1,-1}, {1,1,-1}, {1,-1,-1} }, 0.6f, { {0,1}, {0,0}, {1,0}, {1,1} } },
 };
 
 /**
@@ -129,9 +132,32 @@ typedef struct {
     int materialsToAquire;   // material yielded when broken
 } OreType;
 
+/**
+ * @brief Atlas tile index for each face group of a block type (top, sides,
+ *        bottom). Tile index = row*ATLAS_COLS + col within the block atlas.
+ *        Indexed directly by BlockType.
+ */
+typedef struct {
+    int top;
+    int side;
+    int bottom;
+} BlockTiles;
+
+static const BlockTiles blockTiles[] = {
+    [BLOCK_GRASS]  = { 0, 1, 2 },  // grass top, grass side, dirt bottom
+    [BLOCK_DIRT]   = { 2, 2, 2 },
+    [BLOCK_STONE]  = { 3, 3, 3 },
+    [BLOCK_IRON]   = { 4, 4, 4 },
+    [BLOCK_GOLD]   = { 5, 5, 5 },
+    [BLOCK_GEM]    = { 6, 6, 6 },
+    [BLOCK_PLACED] = { 7, 7, 7 },
+};
+
 /* forward declarations of file-private (static) helpers. */
 static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int oreTypeCount );
+static Mesh buildRange( Map *map, int i0, int j0, int rows, int cols );
 static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols );
+static Mesh buildMeshRangeTextured( Map *map, int i0, int j0, int rows, int cols );
 static void buildMesh( Map *map );
 static void buildChunks( Map *map );
 static bool isSolid( Map *map, int la, int i, int j );
@@ -149,6 +175,7 @@ static void drawCulled( Map *map, Camera3D *camera );
 static void drawMesh( Map *map, Camera3D *camera );
 static void drawChunked( Map *map, Camera3D *camera );
 static void drawChunkedFrustum( Map *map, Camera3D *camera );
+static void drawTextured( Map *map, Camera3D *camera );
 
 /* helper shared by the cube-by-cube strategies (drawNaive / drawCulled). */
 static void drawBlock( Block *block );
@@ -204,11 +231,18 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     new->material = LoadMaterialDefault();
     new->material.maps[MATERIAL_MAP_DIFFUSE].color = WHITE;
 
+    // textured strategy: use the block atlas as the diffuse map.
+    if ( mapStrategy == MAP_STRATEGY_TEXTURED ) {
+        new->material.maps[MATERIAL_MAP_DIFFUSE].texture = rm.blockTypeAtlas;
+    }
+
     // build geometry only for the selected strategy
     // (naive/culled draw from the block array directly and need no prebuild).
     if ( mapStrategy == MAP_STRATEGY_MESH ) {
         buildMesh( new );      // needed by drawMesh    (one mesh for the whole world)
-    } else if ( mapStrategy == MAP_STRATEGY_CHUNKED || mapStrategy == MAP_STRATEGY_CHUNKED_FRUSTUM ) {
+    } else if ( mapStrategy == MAP_STRATEGY_CHUNKED || 
+                mapStrategy == MAP_STRATEGY_CHUNKED_FRUSTUM ||
+                mapStrategy == MAP_STRATEGY_TEXTURED ) {
         buildChunks( new );    // needed by drawChunked and drawChunkedFrustum (one mesh per chunk)
     }
 
@@ -229,6 +263,9 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
             break;
         case MAP_STRATEGY_CHUNKED_FRUSTUM:
             new->draw = drawChunkedFrustum;    // (5) one mesh per chunk with frustum culling
+            break;
+        case MAP_STRATEGY_TEXTURED:
+            new->draw = drawTextured;          // (6) chunks + frustum + textures
             break;
         default:
             new->draw = drawChunkedFrustum;    // fallback for an unhandled strategy
@@ -622,6 +659,19 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
 }
 
 /**
+ * @brief Builds a region's mesh in the format the active strategy needs: the
+ *        textured strategy adds UVs (buildMeshRangeTextured), the others use the
+ *        plain positions+colors mesh (buildMeshRange). Used by buildChunks and
+ *        rebuildChunk so block edits rebuild in the matching format.
+ */
+static Mesh buildRange( Map *map, int i0, int j0, int rows, int cols ) {
+    if ( mapStrategy == MAP_STRATEGY_TEXTURED ) {
+        return buildMeshRangeTextured( map, i0, j0, rows, cols );
+    }
+    return buildMeshRange( map, i0, j0, rows, cols );
+}
+
+/**
  * @brief Builds and uploads a mesh with the visible faces of the blocks in a
  *        rectangular region: all layers, rows [i0, i0+rows), cols [j0, j0+cols).
  *
@@ -729,6 +779,141 @@ static Mesh buildMeshRange( Map *map, int i0, int j0, int rows, int cols ) {
 }
 
 /**
+ * @brief Like buildMeshRange, but also generates per-vertex texture coordinates
+ *        (UVs) so each face shows the right atlas tile for its block type.
+ *
+ * Two differences from buildMeshRange:
+ *  - it fills mesh.texcoords (2 floats/vertex) with the tile's UV rectangle;
+ *  - vertex color carries ONLY the per-face shade (grayscale). The default
+ *    shader computes texture * vertexColor, so a gray shade just darkens the
+ *    texture (fake lighting); the block color is not used here.
+ */
+static Mesh buildMeshRangeTextured( Map *map, int i0, int j0, int rows, int cols ) {
+
+    float hs = map->blockSize / 2.0f; // half edge: corners are at center +/- hs
+
+    int iEnd = i0 + rows;
+    int jEnd = j0 + cols;
+
+    // pass 1: count the visible faces in this region
+    int faceCount = 0;
+    for ( int la = 0; la < map->layers; la++ ) {
+        for ( int i = i0; i < iEnd; i++ ) {
+            for ( int j = j0; j < jEnd; j++ ) {
+                if ( !isSolid( map, la, i, j ) ) {
+                    continue;                       // empty cell emits no faces
+                }
+                for ( int f = 0; f < 6; f++ ) {
+                    const CubeFace *face = &cubeFaces[f];
+                    // if the neighbor on this side is air, the face is visible.
+                    if ( !isSolid( map, la + face->dla, i + face->di, j + face->dj ) ) {
+                        faceCount++;
+                    }
+                }
+            }
+        }
+    }
+
+    // pass 2: allocate vertices + UVs + colors
+    int vertexCount = faceCount * 6;
+
+    Mesh mesh = { 0 };
+    mesh.vertexCount = vertexCount;
+    mesh.triangleCount = faceCount * 2;
+    mesh.vertices  = (float*) MemAlloc( vertexCount * 3 * sizeof( float ) );
+    mesh.texcoords = (float*) MemAlloc( vertexCount * 2 * sizeof( float ) );
+    mesh.colors = (unsigned char*) MemAlloc( vertexCount * 4 * sizeof( unsigned char ) );
+
+    int v  = 0;  // write cursor into vertices[]
+    int t  = 0;  // write cursor into texcoords[]
+    int ci = 0;  // write cursor into colors[]
+    static const int order[6] = { 0, 1, 2, 0, 2, 3 };
+
+    // half-texel inset: sampling exactly on a tile border could bleed into the
+    // neighbor tile (tiles are packed with no gutter), so pull the UV rect in by
+    // half a pixel on every edge.
+    float insetU = 0.5f / rm.blockTypeAtlas.width;
+    float insetV = 0.5f / rm.blockTypeAtlas.height;
+
+    for ( int la = 0; la < map->layers; la++ ) {
+        for ( int i = i0; i < iEnd; i++ ) {
+            for ( int j = j0; j < jEnd; j++ ) {
+
+                if ( !isSolid( map, la, i, j ) ) {
+                    continue;
+                }
+
+                int p = la * ( map->rows * map->cols ) + i * map->cols + j;
+                Vector3 center = map->blocks[p].pos;
+                BlockTiles tiles = blockTiles[map->blocks[p].type];
+                for ( int f = 0; f < 6; f++ ) {
+
+                    const CubeFace *face = &cubeFaces[f];
+
+                    // skip this face if its neighbor is solid (hidden face).
+                    if ( isSolid( map, la + face->dla, i + face->di, j + face->dj ) ) {
+                        continue;
+                    }
+
+                    // pick the tile: face 2 = +Y (top), face 3 = -Y (bottom)
+                    // everything else is a side.
+                    int tile;
+                    if ( f == 2 ) {
+                        tile = tiles.top;
+                    } else if ( f == 3 ) {
+                        tile = tiles.bottom;
+                    } else {
+                        tile = tiles.side;
+                    }
+
+                    int col = tile % ATLAS_COLS;
+                    int row = tile / ATLAS_COLS;
+                    float uMin = (float) col / ATLAS_COLS + insetU;
+                    float uMax = (float) ( col + 1 ) / ATLAS_COLS - insetU;
+                    float vMin = (float) row / ATLAS_ROWS + insetV;
+                    float vMax = (float) ( row + 1 ) / ATLAS_ROWS - insetV;
+
+                    // per-face shade as grayscale )multiplies texture color).
+                    unsigned char s = (unsigned char) ( 255 * face->shade );
+
+                    // emit the 6 vertices (2 triangles) of this face.
+                    for ( int k = 0; k < 6; k++ ) {
+
+                        int corner = order[k];
+                        const float *c = face->corners[order[k]];
+
+                        // position = block center + corner offset scaled by half edge.
+                        mesh.vertices[v++] = center.x + c[0] * hs;
+                        mesh.vertices[v++] = center.y + c[1] * hs;
+                        mesh.vertices[v++] = center.z + c[2] * hs;
+
+                        // tile-local UV (0..1) mapped into the atlas rectangle.
+                        float lu = face->uv[corner][0];
+                        float lv = face->uv[corner][1];
+                        mesh.texcoords[t++] = uMin + lu * ( uMax - uMin );
+                        mesh.texcoords[t++] = vMin + lv * ( vMax - vMin );
+
+                        // grayscale shade
+                        mesh.colors[ci++] = s;
+                        mesh.colors[ci++] = s;
+                        mesh.colors[ci++] = s;
+                        mesh.colors[ci++] = 255;
+
+                    }
+
+                }
+
+            }
+        }
+    }
+
+    // upload to the GPU once (false = static; we won't update it every frame).
+    UploadMesh( &mesh, false );
+    return mesh;
+
+}
+
+/**
  * @brief Builds the single whole-world mesh used by drawMesh.
  *
  * Convenience wrapper around buildMeshRange(): the whole world is just the
@@ -784,7 +969,7 @@ static void buildChunks( Map *map ) {
                 .j0 = j0,
                 .rows = rows,
                 .cols = cols,
-                .mesh = buildMeshRange( map, i0, j0, rows, cols )
+                .mesh = buildRange( map, i0, j0, rows, cols )
             };
 
         }
@@ -870,7 +1055,7 @@ static void rebuildChunk( Map *map, int chunkIndex ) {
 
     Chunk *ch = &map->chunks[chunkIndex];
     UnloadMesh( ch->mesh );   // release the old mesh
-    ch->mesh = buildMeshRange( map, ch->i0, ch->j0, ch->rows, ch->cols );
+    ch->mesh = buildRange( map, ch->i0, ch->j0, ch->rows, ch->cols );
 
 }
 
@@ -979,7 +1164,8 @@ static void refreshGeometryAfterEdit( Map *map, int i, int j ) {
             break;
 
         case MAP_STRATEGY_CHUNKED:
-        case MAP_STRATEGY_CHUNKED_FRUSTUM: {
+        case MAP_STRATEGY_CHUNKED_FRUSTUM:
+        case MAP_STRATEGY_TEXTURED: {
 
                 // always rebuild the chunk that owns this block.
                 rebuildChunk( map, chunkIndexAt( map, i, j ) );
@@ -1136,12 +1322,36 @@ static void drawChunkedFrustum( Map *map, Camera3D *camera ) {
 
         if ( boxInFrustum( &frustum, min, max ) ) {
             DrawMesh( ch->mesh, map->material, transform );
-            //drawnChunks++;
         }
 
     }
 
-    //trace( "%d", drawnChunks );
+}
+
+/**
+ * @brief Rendering strategy 6: same as drawChunkedFrustum (per-chunk meshes with
+ *        frustum culling), but the meshes carry UVs and the material's diffuse
+ *        map is the block atlas, so the world is textured instead of flat-colored.
+ */
+static void drawTextured( Map *map, Camera3D *camera ) {
+
+    Frustum frustum = extractFrustum( camera );
+    Matrix transform = MatrixIdentity();
+
+    //int drawnChunks = 0;
+
+    for ( int c = 0; c < map->chunkCount; c++ ) {
+        
+        Chunk *ch = &map->chunks[c];
+        Vector3 min;
+        Vector3 max;
+        chunkBounds( map, ch, &min, &max );
+
+        if ( boxInFrustum( &frustum, min, max ) ) {
+            DrawMesh( ch->mesh, map->material, transform );
+        }
+
+    }
 
 }
 
