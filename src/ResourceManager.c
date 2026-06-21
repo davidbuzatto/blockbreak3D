@@ -32,40 +32,19 @@ void loadResourcesResourceManager( void ) {
     rm.blockTypeAtlas = LoadTexture( "resources/images/block-type-atlas.png" );
     SetTextureFilter( rm.blockTypeAtlas, TEXTURE_FILTER_POINT );
 
-    rm.skyPanorama = LoadTexture( "resources/images/sky-panorama.png" );
+    // equirectangular panorama, loaded as a GPU texture so genTextureCubemap can
+    // render it onto the 6 cubemap faces. Our raylib build has no HDR support, so
+    // we use a plain PNG panorama (not a .hdr file).
+    rm.skyPanorama = LoadTexture( "resources/images/raylib-example-sky-panorama.png" );
 
     rm.skyboxShader = LoadShader(
         TextFormat( "resources/shaders/glsl%i/skybox.vs", GLSL_VERSION ),
         TextFormat( "resources/shaders/glsl%i/skybox.fs", GLSL_VERSION )
     );
-    SetShaderValue( 
-        rm.skyboxShader,
-        GetShaderLocation( rm.skyboxShader, "environmentMap" ),
-        (int[1]){ MATERIAL_MAP_CUBEMAP },
-        SHADER_UNIFORM_INT
-    );
-    SetShaderValue(
-        rm.skyboxShader,
-        GetShaderLocation( rm.skyboxShader, "doGamma" ),
-        (int[1]){ 1 },
-        SHADER_UNIFORM_INT
-    );
-    SetShaderValue(
-        rm.skyboxShader,
-        GetShaderLocation( rm.skyboxShader, "vflipped" ),
-        (int[1]){ 1 },
-        SHADER_UNIFORM_INT
-    );
 
     rm.skyboxCubemapShader = LoadShader(
         TextFormat( "resources/shaders/glsl%i/cubemap.vs", GLSL_VERSION ),
         TextFormat( "resources/shaders/glsl%i/cubemap.fs", GLSL_VERSION )
-    );
-    SetShaderValue( 
-        rm.skyboxCubemapShader,
-        GetShaderLocation( rm.skyboxCubemapShader, "equirectangularMap" ),
-        (int[1]){ 0 },
-        SHADER_UNIFORM_INT
     );
     
 }

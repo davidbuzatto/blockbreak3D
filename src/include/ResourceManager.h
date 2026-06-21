@@ -15,10 +15,10 @@ typedef struct ResourceManager {
     Model pickaxeModel;     // the pickaxe held by the player
 
     Texture blockTypeAtlas; // 4x4 tile atlas for block faces (textured strategy)
-    Texture skyPanorama;    // sky panorama for skybox
+    Texture skyPanorama;    // equirectangular sky panorama (baked into a cubemap at world creation)
 
-    Shader skyboxShader;         // skybox shader from raylib offical example
-    Shader skyboxCubemapShader;  // skybox cubemap shader from raylib offical example
+    Shader skyboxShader;         // skybox draw shader (raylib official example)
+    Shader skyboxCubemapShader;  // panorama -> cubemap conversion shader (raylib official example)
 
 } ResourceManager;
 

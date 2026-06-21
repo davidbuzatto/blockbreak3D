@@ -27,8 +27,8 @@ static const float CAMERA_DISTANCE_MIN   = 3.0f;    // closest zoom
 static const float CAMERA_DISTANCE_MAX   = 40.0f;   // farthest zoom
 static const float CAMERA_STICK_DEADZONE = 0.1f;    // ignore tiny left-stick noise
 
-static const float PLAYER_REACH = 8.0f;    // how far player can target/break blocks
-static const int BUILD_COST = 1;           // materials spent to place on block
+static const float PLAYER_REACH          = 8.0f;    // how far player can target/break blocks
+static const int BUILD_COST              = 1;       // materials spent to place on block
 
 static const float MOUSE_SENSITIVITY        = 0.1f;   // degrees of look per pixel of mouse movement
 static const float FP_PITCH_LIMIT           = 89.0f;  // first-person up/down look limit (deg)
@@ -67,8 +67,44 @@ GameWorld *createGameWorld( void ) {
     Mesh cube = GenMeshCube( 1.0f, 1.0f, 1.0f );
     gw->skybox = LoadModelFromMesh( cube );
     gw->skybox.materials[0].shader = rm.skyboxShader;
-    gw->skybox.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture = genTextureCubemap( 
+
+    // shader config
+    SetShaderValue( 
         rm.skyboxShader,
+        GetShaderLocation( rm.skyboxShader, "environmentMap" ),
+        (int[1]){ MATERIAL_MAP_CUBEMAP },
+        SHADER_UNIFORM_INT
+    );
+    // doGamma = 0: the panorama is a plain (sRGB) PNG, not HDR, so we must NOT
+    // apply the HDR tonemap/gamma in the shader (it would wash the sky out).
+    SetShaderValue(
+        rm.skyboxShader,
+        GetShaderLocation( rm.skyboxShader, "doGamma" ),
+        (int[1]){ 0 },
+        SHADER_UNIFORM_INT
+    );
+    // vflipped = 1: matches the face orientation genTextureCubemap produces.
+    // (if the sky comes out upside-down, change this to 0.)
+    SetShaderValue(
+        rm.skyboxShader,
+        GetShaderLocation( rm.skyboxShader, "vflipped" ),
+        (int[1]){ 1 },
+        SHADER_UNIFORM_INT
+    );
+
+    SetShaderValue(
+        rm.skyboxCubemapShader,
+        GetShaderLocation( rm.skyboxCubemapShader, "equirectangularMap" ),
+        (int[1]){ 0 },
+        SHADER_UNIFORM_INT
+    );
+
+    // bake the equirectangular panorama into the cubemap stored in the model's
+    // CUBEMAP slot. Pass the CONVERSION shader (skyboxCubemapShader), not the draw
+    // shader. (LoadTextureCubemap can't handle a panorama layout, which is exactly
+    // why the sky was black before.)
+    gw->skybox.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture = genTextureCubemap(
+        rm.skyboxCubemapShader,
         rm.skyPanorama,
         1024,
         PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
@@ -99,6 +135,10 @@ GameWorld *createGameWorld( void ) {
  * @brief Frees the game world and everything it owns (map and player).
  */
 void destroyGameWorld( GameWorld *gw ) {
+    // the cubemap baked at creation lives in the model's material; unload it and
+    // the cube model here (the skybox shaders are owned by the ResourceManager).
+    UnloadTexture( gw->skybox.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture );
+    UnloadModel( gw->skybox );
     destroyMap( gw->map );
     destroyPlayer( gw->player );
     free( gw );
@@ -418,7 +458,7 @@ static TextureCubemap genTextureCubemap( Shader shader, Texture2D panorama, int 
 
     // STEP 2: Draw to framebuffer
     //------------------------------------------------------------------------------------------
-    // NOTE: Shader is used to convert HDR equirectangular environment map to cubemap equivalent (6 faces)
+    // NOTE: the conversion shader renders the equirectangular panorama onto the 6 cubemap faces
     rlEnableShader(shader.id);
 
     // Define projection matrix and send it to shader
