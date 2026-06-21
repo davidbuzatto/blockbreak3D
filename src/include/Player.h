@@ -26,6 +26,7 @@ struct Player {
     float modelScale;       // uniform scale to fit the model to the collision box.
     float pickaxeScale;     // uniform scale to fit the pickaxe to a target size.
     float swingTimer;       // seconds to perform a swing
+    float stepRemaining;    // vertical distance still to climb for a smooth auto-step (0 = not climbing)
 
     Map *map;               // world the player moves and collides against.
     bool onGround;          // true when standing on a solid block (enables jump).

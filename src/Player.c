@@ -25,7 +25,10 @@ static const float JUMP_SPEED          = 9.0f;    // initial upward velocity of 
 static const float MODEL_FACING_OFFSET = 0.0f;    // corrects the model's default facing
 static const float MAX_STEP_HEIGHT     = 1.0f;    // tallest ledge the player auto-steps up
 static const float STICK_DEADZONE      = 0.1f;    // ignore tiny left-stick noise
-static const bool  AUTO_STEP           = false;   // climb 1-block ledges automatically
+
+static const bool  AUTO_STEP           = true;    // climb 1-block ledges automatically
+static const float STEP_CLIMB_SPEED    = 8.0f;    // how fast the auto-step rise eases up (units/s; 1 block ~= 0.12s )
+static const float STEP_PROBE          = 0.05f;   // vertical resolution used to measure a ledge's height
 
 static const float PICKAXE_TARGET_SCALE = 1.0f;   // desired world size (auto-scaled from the model)
 static const float PICKAXE_OFFSET_X     = -0.3f;   // hand offset: right (+) / left (-)
@@ -95,6 +98,7 @@ Player *createPlayer( float x, float y, float z, float width, float height, Colo
 
     new->map = NULL;
     new->onGround = false;
+    new->stepRemaining = 0.0f;
     new->availableMaterials = 200;
 
     new->color = color;
@@ -359,52 +363,69 @@ static void update( Player *player, float delta ) {
         player->facingAngle = atan2f( player->vel.x, player->vel.z ) * RAD2DEG;
     }
 
-    // --- gravity: accelerate the fall each frame, capped at terminal velocity ---
-    player->vel.y += GRAVITY * delta;
-    if ( player->vel.y < TERMINAL_VELOCITY ) {
-        player->vel.y = TERMINAL_VELOCITY;
-    }
+    if ( player->stepRemaining > 0.0f ) {
 
-    // --- vertical movement + ground/ceiling collision, SUB-STEPPED so a fast fall can't pass
-    //     through the ground (or snap onto a buried block) ---
-    float dy = player->vel.y * delta;
-
-    // split dy into chunks no larger than (almost) one block, so the box always
-    // meets a floor/ceiling before it could skip past it.
-    float maxStep = player->map->blockSize * 0.9f;
-    int steps = (int) ceilf( fabsf( dy ) / maxStep );
-    if ( steps < 1 ) {
-        steps = 1;
-    }
-    float stepY = dy / steps;
-
-    // assume airborne; a downward sub-step that lands sets this back to true.
-    player->onGround = false;
-
-    for ( int s = 0; s < steps; s++ ) {
-
-        player->pos.y += stepY;
-
-        if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
-            continue;  // this slice is clear, keep falling/rising
+        float rise = STEP_CLIMB_SPEED * delta;
+        if ( rise > player->stepRemaining ) {
+            rise = player->stepRemaining;
         }
 
-        if ( dy <= 0.0f ) {
+        player->pos.y += rise;
+        player->stepRemaining -= rise;
 
-            // falling: snap the feet onto the top of the block we just touched.
-            float feetY = player->pos.y - player->dim.y * 0.5f;
-            int la = (int) floorf( ( feetY - player->map->pos.y ) / player->map->blockSize + 0.5f );
-            float blockTop = player->map->pos.y + player->map->blockSize * la + player->map->blockSize * 0.5f;
-            player->pos.y = blockTop + player->dim.y * 0.5f;
-            player->onGround = true;
+        player->onGround = true;
+        player->vel.y    = 0.0f;
 
-        } else {
-            // rising into a ceiling: undo just this sub-step.
-            player->pos.y -= stepY;
+    } else {
+
+        // --- gravity: accelerate the fall each frame, capped at terminal velocity ---
+        player->vel.y += GRAVITY * delta;
+        if ( player->vel.y < TERMINAL_VELOCITY ) {
+            player->vel.y = TERMINAL_VELOCITY;
         }
 
-        player->vel.y = 0.0f;
-        break;   // resolved this frame's vertical movement; stop slicing.
+        // --- vertical movement + ground/ceiling collision, SUB-STEPPED so a fast fall can't pass
+        //     through the ground (or snap onto a buried block) ---
+        float dy = player->vel.y * delta;
+
+        // split dy into chunks no larger than (almost) one block, so the box always
+        // meets a floor/ceiling before it could skip past it.
+        float maxStep = player->map->blockSize * 0.9f;
+        int steps = (int) ceilf( fabsf( dy ) / maxStep );
+        if ( steps < 1 ) {
+            steps = 1;
+        }
+        float stepY = dy / steps;
+
+        // assume airborne; a downward sub-step that lands sets this back to true.
+        player->onGround = false;
+
+        for ( int s = 0; s < steps; s++ ) {
+
+            player->pos.y += stepY;
+
+            if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
+                continue;  // this slice is clear, keep falling/rising
+            }
+
+            if ( dy <= 0.0f ) {
+
+                // falling: snap the feet onto the top of the block we just touched.
+                float feetY = player->pos.y - player->dim.y * 0.5f;
+                int la = (int) floorf( ( feetY - player->map->pos.y ) / player->map->blockSize + 0.5f );
+                float blockTop = player->map->pos.y + player->map->blockSize * la + player->map->blockSize * 0.5f;
+                player->pos.y = blockTop + player->dim.y * 0.5f;
+                player->onGround = true;
+
+            } else {
+                // rising into a ceiling: undo just this sub-step.
+                player->pos.y -= stepY;
+            }
+
+            player->vel.y = 0.0f;
+            break;   // resolved this frame's vertical movement; stop slicing.
+
+        }
 
     }
 
@@ -492,6 +513,7 @@ static void moveAxis( Player *player, float *coord, float amount ) {
     // blocked. only try to climb when on the ground (no wall-climbing mid-air).
     if ( AUTO_STEP && player->onGround ) {
 
+        /*
         // try the same move lifted by a step: if it's clear now, we climbed a
         // ledge; the gravity + ground snap later this frame settles us onto it.
         player->pos.y += MAX_STEP_HEIGHT;
@@ -499,6 +521,29 @@ static void moveAxis( Player *player, float *coord, float amount ) {
             return;   // stepped up successfully
         }
         player->pos.y -= MAX_STEP_HEIGHT;   // still blocked even when raised
+        */
+
+        float lifted = 0.0f;
+        bool clears = false;
+
+        while ( lifted < MAX_STEP_HEIGHT ) {
+            player->pos.y += STEP_PROBE;
+            lifted += STEP_PROBE;
+            if ( !mapBoxCollides( player->map, player->pos, player->dim ) ) {
+                clears = true;
+                break;
+            }
+        }
+
+        player->pos.y -= lifted;
+
+        if ( clears ) {
+            player->stepRemaining = lifted;
+            return;
+        }
+
+        *coord = before;
+
     }
 
     // truly blocked (a real wall): undo the horizontal move.
