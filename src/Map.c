@@ -122,9 +122,10 @@ typedef struct {
  */
 typedef struct {
     float scale;             // vein frequency (higher = smaller, busier veins)
-    float threshold;        // rarity (higher = rarer)
+    float threshold;         // rarity (higher = rarer)
     float seed;              // coordinate offset; decorrelates it from other noises
     Color color;             // ore color
+    BlockType type;          // material type (used by the texture strategy)
     int materialsToAquire;   // material yielded when broken
 } OreType;
 
@@ -189,9 +190,9 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     // ore types seeded into the stone, listed rarest-first so a rarer ore wins
     // where veins overlap. (local array so the named Color macros are valid here.)
     OreType oreTypes[] = {
-        { 0.14f, 0.45f, 900.0f, BLUE, 15 },    // gem (rarest, most valuable)
-        { 0.12f, 0.38f, 500.0f, GOLD, 8 },     // gold
-        { 0.10f, 0.30f, 200.0f, ORANGE, 3 },   // iron (most common)
+        { 0.14f, 0.45f, 900.0f, BLUE,   BLOCK_GEM,  15 },   // gem (rarest, most valuable)
+        { 0.12f, 0.38f, 500.0f, GOLD,   BLOCK_GOLD,  8 },   // gold
+        { 0.10f, 0.30f, 200.0f, ORANGE, BLOCK_IRON,  3 },   // iron (most common)
     };
     int oreTypeCount = sizeof( oreTypes ) / sizeof( OreType );
 
@@ -317,6 +318,7 @@ bool placeBlock( Map *map, int la, int i, int j, Color color ) {
     // turn it solid.
     map->blocks[p].broken = false;
     map->blocks[p].color = color;
+    map->blocks[p].type = BLOCK_PLACED;
     map->blocks[p].hits = 0;
     map->blocks[p].hitsToBreak = 1;
     map->blocks[p].materialsToAquire = 1;
@@ -548,6 +550,7 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
             for ( int la = 0; la < map->layers; la++ ) {
 
                 Color color = ORANGE;
+                BlockType type = BLOCK_STONE;
                 int hitsToBreak = 1;
                 int materialsToAquire = 1;
 
@@ -557,11 +560,14 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
                 // color by depth: surface = grass, just below = dirt, deep = stone.
                 if ( la == h ) {
                     color = GREEN;
+                    type = BLOCK_GRASS;
                 } else if ( la >= h - 2 ) {
                     color = BROWN;
+                    type = BLOCK_DIRT;
                 } else {
 
                     color = GRAY;
+                    type = BLOCK_STONE;
 
                     // ore veins: test each ore's own 3D noise; the first (rarest)
                     // match wins, so overlapping veins give the more valuable ore.
@@ -578,6 +584,7 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
 
                         if ( oreNoise > ore.threshold ) {
                             color = ore.color;
+                            type = ore.type;
                             materialsToAquire = ore.materialsToAquire;
                             break;
                         }
@@ -600,6 +607,7 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
                         map->blockSize
                     },
                     .color = color,
+                    .type = type,
                     .hitsToBreak = hitsToBreak,
                     .hits = 0,
                     .materialsToAquire = materialsToAquire,
