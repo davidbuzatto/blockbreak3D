@@ -18,6 +18,11 @@
 #include "Player.h"
 #include "ResourceManager.h"
 
+typedef struct {
+    Color color;
+    BlockType type;
+} BuildType;
+
 static const float CAMERA_YAW_SPEED      = 90.0f;   // yaw rotation speed (deg/s)
 static const float CAMERA_PITCH_SPEED    = 90.0f;   // pitch rotation speed (deg/s)
 static const float CAMERA_PITCH_MIN      = 5.0f;    // keep the camera above the ground
@@ -42,6 +47,7 @@ static float cameraDistance = 10.0f;   // orbit radius (world units)
 static bool firstPerson     = true;    // camera mode: true = first person, false = third person
 
 static BlockType currentBuildType;
+static BuildType buildTypes[4];
 
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );
@@ -128,6 +134,13 @@ GameWorld *createGameWorld( void ) {
     if ( firstPerson ) {
         DisableCursor();
     }
+
+    // build
+    buildTypes[BLOCK_GRASS] = (BuildType) { GREEN, BLOCK_GRASS };
+    buildTypes[BLOCK_DIRT] = (BuildType) { BROWN, BLOCK_DIRT };
+    buildTypes[BLOCK_STONE] = (BuildType) { GRAY, BLOCK_STONE };
+    buildTypes[BLOCK_WOOD] = (BuildType) { DARKBROWN, BLOCK_WOOD };
+    currentBuildType = BLOCK_WOOD;
 
     return gw;
 
@@ -292,12 +305,36 @@ void updateGameWorld( GameWorld *gw, float delta ) {
                 fabsf( bc.y - gw->player->pos.y ) < ( bs + d.y ) * 0.5f &&
                 fabsf( bc.z - gw->player->pos.z ) < ( bs + d.z ) * 0.5f;
 
-            if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, DARKBROWN, BLOCK_WOOD ) ) {
+            if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, buildTypes[currentBuildType].color, buildTypes[currentBuildType].type ) ) {
                 gw->player->availableMaterials -= BUILD_COST;
             }
 
         }
 
+    }
+
+    // change build type
+    // keyboard
+    if ( IsKeyPressed( KEY_ONE ) ) {
+        currentBuildType = BLOCK_GRASS;
+    } else if ( IsKeyPressed( KEY_TWO ) ) {
+        currentBuildType = BLOCK_DIRT;
+    } else if ( IsKeyPressed( KEY_THREE ) ) {
+        currentBuildType = BLOCK_STONE;
+    } else if ( IsKeyPressed( KEY_FOUR ) ) {
+        currentBuildType = BLOCK_WOOD;
+    }
+
+    // joystick
+    if ( IsGamepadAvailable( 0 ) ) {
+        if ( IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_LEFT_TRIGGER_1 ) ) {
+            currentBuildType--;
+            if ( (int) currentBuildType < 0 ) {
+                currentBuildType = BLOCK_WOOD;
+            }
+        } else if ( IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1 ) ) {
+            currentBuildType = ( currentBuildType + 1 ) % 4;
+        }
     }
 
 }
@@ -391,12 +428,84 @@ void updateCamera( Camera3D *camera, Player *player ) {
  */
 static void drawHud( GameWorld *gw ) {
 
-    const char *text = TextFormat( "Available Materials: %d", gw->player->availableMaterials );
-    int w = MeasureText( text, 20 );
-    DrawRectangle( 10, 10, w + 10, 30, Fade( WHITE, 0.5f ) );
-    DrawText( text, 15, 15, 20, BLACK );
+    int marginX = 10;
+    int marginY = 10;
+    int xStart = 10;
+    int yStart = 10;
+    int tileW = 32;
+    int sourceW = 128;
+    int hSpace = 10;
+    int fontSize = 20;
+    int blockTypesCount = 4;
+    int blockTypeMenuW = 175;
+    int xIni = GetScreenWidth() / 2 - blockTypeMenuW / 2 - 2;
 
-    DrawFPS( 10, GetScreenHeight() - 25 );
+    DrawRectangleRounded(
+        (Rectangle) { xIni, marginY, blockTypeMenuW, 52 },
+        0.5f,
+        10,
+        Fade( WHITE, 0.5f )
+    );
+
+    for ( int i = 0; i < blockTypesCount; i++ ) {
+
+        int col = ( i + 1 ) % ATLAS_COLS;
+        int row = ( i + 1 ) / ATLAS_COLS;
+
+        DrawTexturePro(
+            rm.blockTypeAtlas,
+            (Rectangle) { sourceW * col, sourceW * row, sourceW, sourceW },
+            (Rectangle) { 
+                xIni + xStart + ( tileW + hSpace ) * i,
+                marginY + yStart,
+                tileW, tileW
+            },
+            (Vector2) { 0 },
+            0.0f,
+            WHITE
+        );
+
+        const char *text = TextFormat( "%d", i + 1 );
+        int textW = MeasureText( text, fontSize );
+        DrawText( 
+            TextFormat( "%d", i + 1 ),
+            xIni + xStart + ( tileW + hSpace ) * i + tileW / 2 - textW / 2,
+            marginY + yStart + fontSize / 2 - 2,
+            fontSize,
+            WHITE
+        );
+
+    }
+
+    DrawRectangleLinesEx( 
+        (Rectangle) { 
+            xIni + xStart + ( tileW + hSpace ) * currentBuildType,
+            marginY + yStart,
+            tileW, tileW
+        },
+        3,
+        YELLOW
+    );
+
+    const char *textAM = TextFormat( "Available Materials: %d", gw->player->availableMaterials );
+    int amW = MeasureText( textAM, fontSize );
+    DrawRectangleRounded(
+        (Rectangle) { 
+            marginX, 
+            GetScreenHeight() - marginY - 30,
+            amW + 10,
+            30
+        },
+        0.5f,
+        10,
+        Fade( WHITE, 0.5f )
+    );
+    DrawText( textAM, marginX + 5, GetScreenHeight() - marginY - 25, fontSize, BLACK );
+
+    int fps = GetFPS();
+    const char *textFPS = TextFormat( "%d FPS", fps );
+    int fpsW = MeasureText( textFPS, fontSize );
+    DrawFPS( GetScreenWidth() - fpsW - marginX, marginY );
 
 }
 

@@ -13,6 +13,9 @@
 
 #include "Block.h"
 
+#define ATLAS_COLS 4
+#define ATLAS_ROWS 4
+
 typedef struct Map Map;
 typedef struct Chunk Chunk;
 typedef struct RayHit RayHit;

@@ -43,8 +43,6 @@
 #include "ResourceManager.h"
 
 #define CHUNK_SIZE 16
-#define ATLAS_COLS 4
-#define ATLAS_ROWS 4
 
 /**
  * @brief Defines the types of build strategies that can be used to create 

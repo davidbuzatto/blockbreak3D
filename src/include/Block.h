@@ -10,7 +10,7 @@
  *        using Block.color, so color and type coexist (no strategy is broken).
  */
 typedef enum {
-    BLOCK_GRASS,
+    BLOCK_GRASS = 0,
     BLOCK_DIRT,
     BLOCK_STONE,
     BLOCK_WOOD,
