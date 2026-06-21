@@ -19,18 +19,18 @@
 #include "Player.h"
 #include "ResourceManager.h"
 
-static const float GRAVITY             = -25.0f;  // downward acceleration (units/s^2)
-static const float TERMINAL_VELOCITY   = -50.0f;  // maximum fall speed (clamp)
-static const float JUMP_SPEED          = 9.0f;    // initial upward velocity of a jump
-static const float MODEL_FACING_OFFSET = 0.0f;    // corrects the model's default facing
-static const float MAX_STEP_HEIGHT     = 1.0f;    // tallest ledge the player auto-steps up
-static const float STICK_DEADZONE      = 0.1f;    // ignore tiny left-stick noise
+static const float GRAVITY              = -25.0f;  // downward acceleration (units/s^2)
+static const float TERMINAL_VELOCITY    = -50.0f;  // maximum fall speed (clamp)
+static const float JUMP_SPEED           = 9.0f;    // initial upward velocity of a jump
+static const float MODEL_FACING_OFFSET  = 0.0f;    // corrects the model's default facing
+static const float MAX_STEP_HEIGHT      = 1.0f;    // tallest ledge the player auto-steps up
+static const float STICK_DEADZONE       = 0.1f;    // ignore tiny left-stick noise
 
-static const bool  AUTO_STEP           = true;    // climb 1-block ledges automatically
-static const float STEP_CLIMB_SPEED    = 8.0f;    // how fast the auto-step rise eases up (units/s; 1 block ~= 0.12s )
-static const float STEP_PROBE          = 0.05f;   // vertical resolution used to measure a ledge's height
+static const bool  AUTO_STEP            = true;    // climb 1-block ledges automatically
+static const float STEP_CLIMB_SPEED     = 8.0f;    // how fast the auto-step rise eases up (units/s; 1 block ~= 0.12s )
+static const float STEP_PROBE           = 0.05f;   // vertical resolution used to measure a ledge's height
 
-static const float PICKAXE_TARGET_SCALE = 1.0f;   // desired world size (auto-scaled from the model)
+static const float PICKAXE_TARGET_SCALE = 1.0f;    // desired world size (auto-scaled from the model)
 static const float PICKAXE_OFFSET_X     = -0.3f;   // hand offset: right (+) / left (-)
 static const float PICKAXE_OFFSET_Y     = 0.05f;   // hand offset: up (+) / down (-)
 static const float PICKAXE_OFFSET_Z     = 0.45f;   // hand offset: forward (+) / back (-)
@@ -41,15 +41,15 @@ static const float PICKAXE_GRIP_X       = -0.4f;   // swing pivot X
 static const float PICKAXE_GRIP_Y       = 0.0f;    // swing pivot Y
 static const float PICKAXE_GRIP_Z       = 0.4f;    // swing pivot Z
 
-static const float SWING_DURATION  = 0.25f;   // seconds for one full swing
-static const float SWING_AMPLITUDE = -70.0f;  // peek swing angle (deg)
+static const float SWING_DURATION       = 0.25f;   // seconds for one full swing
+static const float SWING_AMPLITUDE      = -70.0f;  // peek swing angle (deg)
 
-static const float FP_PICKAXE_FORWARD = 1.0f;    // distance in front of the eye
-static const float FP_PICKAXE_RIGHT   = 0.6f;    // to the right (+) / left (-)
-static const float FP_PICKAXE_UP      = -0.2f;   // down(-) / up (+)
-static const float FP_PICKAXE_ROT_X   = 99.0f;   // orient model in view X (deg)
-static const float FP_PICKAXE_ROT_Y   = 5.0f;    // orient model in view Y (deg)
-static const float FP_PICKAXE_ROT_Z   = -103.0f;  // orient model in view Z (deg)
+static const float FP_PICKAXE_FORWARD   = 1.0f;    // distance in front of the eye
+static const float FP_PICKAXE_RIGHT     = 0.6f;    // to the right (+) / left (-)
+static const float FP_PICKAXE_UP        = -0.2f;   // down(-) / up (+)
+static const float FP_PICKAXE_ROT_X     = 99.0f;   // orient model in view X (deg)
+static const float FP_PICKAXE_ROT_Y     = 5.0f;    // orient model in view Y (deg)
+static const float FP_PICKAXE_ROT_Z     = -103.0f; // orient model in view Z (deg)
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -363,8 +363,13 @@ static void update( Player *player, float delta ) {
         player->facingAngle = atan2f( player->vel.x, player->vel.z ) * RAD2DEG;
     }
 
+    // --- auto-step climb: while we owe a ledge climb, ease the box up a little
+    //     each frame instead of teleporting. the climb owns the Y axis here, so
+    //     gravity and the normal vertical collision (below) are skipped to avoid
+    //     the two fighting over pos.y.
     if ( player->stepRemaining > 0.0f ) {
 
+        // rise a fixed amount per frame, but never overshoot the ledge top.
         float rise = STEP_CLIMB_SPEED * delta;
         if ( rise > player->stepRemaining ) {
             rise = player->stepRemaining;
@@ -373,8 +378,8 @@ static void update( Player *player, float delta ) {
         player->pos.y += rise;
         player->stepRemaining -= rise;
 
-        player->onGround = true;
-        player->vel.y    = 0.0f;
+        player->onGround = true;   // settling onto the ledge: stay grounded
+        player->vel.y    = 0.0f;   // the climb overrides gravity this frame
 
     } else {
 
@@ -523,6 +528,9 @@ static void moveAxis( Player *player, float *coord, float amount ) {
         player->pos.y -= MAX_STEP_HEIGHT;   // still blocked even when raised
         */
 
+        // probe upward in small steps: how high must the box rise to clear the
+        // obstacle? we raise the test box bit by bit until it stops colliding
+        // (a ledge), or we exceed MAX_STEP_HEIGHT (a real wall / unclimbable).
         float lifted = 0.0f;
         bool clears = false;
 
@@ -535,14 +543,14 @@ static void moveAxis( Player *player, float *coord, float amount ) {
             }
         }
 
+        // lower the test box back down: we do NOT teleport up here. the actual
+        // rise is eased over several frames in update() via stepRemaining.
         player->pos.y -= lifted;
 
         if ( clears ) {
-            player->stepRemaining = lifted;
+            player->stepRemaining = lifted;   // remember the climb; keep the horizontal move
             return;
         }
-
-        *coord = before;
 
     }
 
