@@ -197,7 +197,8 @@ void updateGameWorld( GameWorld *gw, float delta ) {
 
     }
 
-    // break the aimed block instantly (left mouse / B key / gamepad right trigger).
+    // on a "break" input (left mouse / B / gamepad right trigger), always swing
+    // the pickaxe; break the aimed block too if there is one.
     if ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) {
         playerSwingPickaxe( gw->player );
@@ -206,8 +207,9 @@ void updateGameWorld( GameWorld *gw, float delta ) {
         }
     }
 
-    // place a block on the empty cell next to the aimed block (right mouse / C /
-    // gamepad left trigger), if we have material and the spot isn't the player.
+    // on a "place" input (right mouse / C / gamepad left trigger), always swing;
+    // if aiming at a block and we have material, place one on the adjacent empty
+    // cell (unless that cell would be inside the player).
     if ( IsMouseButtonPressed( MOUSE_BUTTON_RIGHT ) || IsKeyPressed( KEY_C ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_LEFT_TRIGGER_2 ) ) ) {
         
