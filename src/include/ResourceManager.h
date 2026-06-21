@@ -10,9 +10,16 @@
 #include "raylib/raylib.h"
 
 typedef struct ResourceManager {
+
     Model playerModel;      // the player's 3D model (character-k.glb)
     Model pickaxeModel;     // the pickaxe held by the player
+
     Texture blockTypeAtlas; // 4x4 tile atlas for block faces (textured strategy)
+    Texture skyPanorama;    // sky panorama for skybox
+
+    Shader skyboxShader;         // skybox shader from raylib offical example
+    Shader skyboxCubemapShader;  // skybox cubemap shader from raylib offical example
+
 } ResourceManager;
 
 /**

@@ -10,6 +10,7 @@
 
 #include "raylib/raylib.h"
 #include "raylib/raymath.h"
+#include "raylib/rlgl.h"
 
 #include "GameWorld.h"
 #include "Macros.h"
@@ -45,6 +46,8 @@ static void drawHud( GameWorld *gw );
 static void drawTargetBlockHighlighting( GameWorld *gw );
 static void drawCrosshair( void );
 
+static TextureCubemap genTextureCubemap( Shader shader, Texture2D panorama, int size, int format );
+
 /**
  * @brief Creates a dynamically allocated GameWorld struct instance.
  */
@@ -59,6 +62,17 @@ GameWorld *createGameWorld( void ) {
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
     gw->player = createPlayer( 0, 18, 0, 0.8f, 2.0f, BLUE );   // spawn high so it falls onto the terrain
     gw->player->map = gw->map;                        // give the player the world to collide against
+
+    // skybox
+    Mesh cube = GenMeshCube( 1.0f, 1.0f, 1.0f );
+    gw->skybox = LoadModelFromMesh( cube );
+    gw->skybox.materials[0].shader = rm.skyboxShader;
+    gw->skybox.materials[0].maps[MATERIAL_MAP_CUBEMAP].texture = genTextureCubemap( 
+        rm.skyboxShader,
+        rm.skyPanorama,
+        1024,
+        PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+    );
 
     // start the model facing "forward" (away from the camera) instead of looking
     // at it: feed the camera-relative forward vector into the same atan2 the
@@ -256,6 +270,12 @@ void drawGameWorld( GameWorld *gw ) {
 
     BeginMode3D( gw->camera );
 
+    rlDisableBackfaceCulling();
+    rlDisableDepthMask();
+        DrawModel( gw->skybox, (Vector3){0, 0, 0}, 1.0f, WHITE );
+    rlEnableBackfaceCulling();
+    rlEnableDepthMask();
+
     gw->map->draw( gw->map, &gw->camera );
 
     // target highlight before the player/pickaxe, so the first-person viewmodel
@@ -370,5 +390,98 @@ static void drawCrosshair( void ) {
 
     DrawLine( cx - 8, cy, cx + 8, cy, BLACK );
     DrawLine( cx, cy - 8, cx, cy + 8, BLACK );
+
+}
+
+/**
+ * @brief Generate cubemap (6 faces) from equirectangular (panorama) texture.
+ *        Extracted from Raylib examples.
+ */
+static TextureCubemap genTextureCubemap( Shader shader, Texture2D panorama, int size, int format ) {
+
+    TextureCubemap cubemap = { 0 };
+
+    rlDisableBackfaceCulling();     // Disable backface culling to render inside the cube
+
+    // STEP 1: Setup framebuffer
+    //------------------------------------------------------------------------------------------
+    unsigned int rbo = rlLoadTextureDepth(size, size, true);
+    cubemap.id = rlLoadTextureCubemap(0, size, format, 1);
+
+    unsigned int fbo = rlLoadFramebuffer();
+    rlFramebufferAttach(fbo, rbo, RL_ATTACHMENT_DEPTH, RL_ATTACHMENT_RENDERBUFFER, 0);
+    rlFramebufferAttach(fbo, cubemap.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_CUBEMAP_POSITIVE_X, 0);
+
+    // Check if framebuffer is complete with attachments (valid)
+    if (rlFramebufferComplete(fbo)) TraceLog(LOG_INFO, "FBO: [ID %i] Framebuffer object created successfully", fbo);
+    //------------------------------------------------------------------------------------------
+
+    // STEP 2: Draw to framebuffer
+    //------------------------------------------------------------------------------------------
+    // NOTE: Shader is used to convert HDR equirectangular environment map to cubemap equivalent (6 faces)
+    rlEnableShader(shader.id);
+
+    // Define projection matrix and send it to shader
+    Matrix matFboProjection = MatrixPerspective(90.0*DEG2RAD, 1.0, rlGetCullDistanceNear(), rlGetCullDistanceFar());
+    rlSetUniformMatrix(shader.locs[SHADER_LOC_MATRIX_PROJECTION], matFboProjection);
+
+    // Define view matrix for every side of the cubemap
+    Matrix fboViews[6] = {
+        MatrixLookAt((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){  1.0f,  0.0f,  0.0f }, (Vector3){ 0.0f, -1.0f,  0.0f }),
+        MatrixLookAt((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){ -1.0f,  0.0f,  0.0f }, (Vector3){ 0.0f, -1.0f,  0.0f }),
+        MatrixLookAt((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){  0.0f,  1.0f,  0.0f }, (Vector3){ 0.0f,  0.0f,  1.0f }),
+        MatrixLookAt((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){  0.0f, -1.0f,  0.0f }, (Vector3){ 0.0f,  0.0f, -1.0f }),
+        MatrixLookAt((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){  0.0f,  0.0f,  1.0f }, (Vector3){ 0.0f, -1.0f,  0.0f }),
+        MatrixLookAt((Vector3){ 0.0f, 0.0f, 0.0f }, (Vector3){  0.0f,  0.0f, -1.0f }, (Vector3){ 0.0f, -1.0f,  0.0f })
+    };
+
+    rlViewport(0, 0, size, size);   // Set viewport to current fbo dimensions
+
+    // Activate and enable texture for drawing to cubemap faces
+    rlActiveTextureSlot(0);
+    rlEnableTexture(panorama.id);
+
+    for (int i = 0; i < 6; i++)
+    {
+        // Set the view matrix for the current cube face
+        rlSetUniformMatrix(shader.locs[SHADER_LOC_MATRIX_VIEW], fboViews[i]);
+
+        // Select the current cubemap face attachment for the fbo
+        // WARNING: This function by default enables->attach->disables fbo!!!
+        rlFramebufferAttach(fbo, cubemap.id, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_CUBEMAP_POSITIVE_X + i, 0);
+        rlEnableFramebuffer(fbo);
+
+        // Load and draw a cube, it uses the current enabled texture
+        rlClearScreenBuffers();
+        rlLoadDrawCube();
+
+        // ALTERNATIVE: Try to use internal batch system to draw the cube instead of rlLoadDrawCube
+        // for some reason this method does not work, maybe due to cube triangles definition? normals pointing out?
+        // TODO: Investigate this issue...
+        //rlSetTexture(panorama.id); // WARNING: It must be called after enabling current framebuffer if using internal batch system!
+        //rlClearScreenBuffers();
+        //DrawCubeV(Vector3Zero(), Vector3One(), WHITE);
+        //rlDrawRenderBatchActive();
+    }
+    //------------------------------------------------------------------------------------------
+
+    // STEP 3: Unload framebuffer and reset state
+    //------------------------------------------------------------------------------------------
+    rlDisableShader();          // Unbind shader
+    rlDisableTexture();         // Unbind texture
+    rlDisableFramebuffer();     // Unbind framebuffer
+    rlUnloadFramebuffer(fbo);   // Unload framebuffer (and automatically attached depth texture/renderbuffer)
+
+    // Reset viewport dimensions to default
+    rlViewport(0, 0, rlGetFramebufferWidth(), rlGetFramebufferHeight());
+    rlEnableBackfaceCulling();
+    //------------------------------------------------------------------------------------------
+
+    cubemap.width = size;
+    cubemap.height = size;
+    cubemap.mipmaps = 1;
+    cubemap.format = format;
+
+    return cubemap;
 
 }
