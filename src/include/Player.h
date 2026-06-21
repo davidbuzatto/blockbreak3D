@@ -53,3 +53,8 @@ void destroyPlayer( Player *player );
  * @brief Starts a pickaxe swing animation (call when the player uses the tool).
  */
 void playerSwingPickaxe( Player *player );
+
+/**
+ * @brief Draws the pickaxe as a first-person viewmodel (stuck to the camera).
+ */
+void drawPlayerPickaxeViewmodel( Player *player, Camera3D *camera );

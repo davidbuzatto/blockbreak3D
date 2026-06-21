@@ -38,7 +38,7 @@ static const bool  GAMEPAD_INVERT_CAMERA_Y  = true;   // invert the gamepad came
 static float cameraYaw      = 90.0f;   // horizontal angle (deg)
 static float cameraPitch    = 30.0f;   // vertical angle (deg)
 static float cameraDistance = 10.0f;   // orbit radius (world units)
-static bool firstPerson     = false;   // camera mode: true = first person, false = third person
+static bool firstPerson     = true;    // camera mode: true = first person, false = third person
 
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );
@@ -257,9 +257,13 @@ void drawGameWorld( GameWorld *gw ) {
     BeginMode3D( gw->camera );
 
     gw->map->draw( gw->map, &gw->camera );
+
     if ( !firstPerson ) {
         gw->player->draw( gw->player );   // hidden in first person (camera is inside it)
+    } else {
+        drawPlayerPickaxeViewmodel( gw->player, &gw->camera );
     }
+
     drawTargetBlockHighlighting( gw );
     DrawGrid( 100, 1 );
 

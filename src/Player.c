@@ -37,8 +37,15 @@ static const float PICKAXE_GRIP_X       = -0.4f;   // swing pivot X
 static const float PICKAXE_GRIP_Y       = 0.0f;    // swing pivot Y
 static const float PICKAXE_GRIP_Z       = 0.4f;    // swing pivot Z
 
-static const float SWING_DURATION  = 0.25f;  // seconds for one full swing
+static const float SWING_DURATION  = 0.25f;   // seconds for one full swing
 static const float SWING_AMPLITUDE = -70.0f;  // peek swing angle (deg)
+
+static const float FP_PICKAXE_FORWARD = 1.0f;    // distance in front of the eye
+static const float FP_PICKAXE_RIGHT   = 0.6f;    // to the right (+) / left (-)
+static const float FP_PICKAXE_UP      = -0.2f;   // down(-) / up (+)
+static const float FP_PICKAXE_ROT_X   = 99.0f;   // orient model in view X (deg)
+static const float FP_PICKAXE_ROT_Y   = 5.0f;    // orient model in view Y (deg)
+static const float FP_PICKAXE_ROT_Z   = -103.0f;  // orient model in view Z (deg)
 
 static void input( Player *player );
 static void update( Player *player, float delta );
@@ -116,6 +123,60 @@ void playerSwingPickaxe( Player *player ) {
 }
 
 /**
+ * @brief Draws the pickaxe as a first-person viewmodel: stuck to the camera,
+ *        in the lower-right of the view (used when the body is hidden in FP).
+ */
+void drawPlayerPickaxeViewmodel( Player *player, Camera3D *camera ) {
+
+    // the camera's basis vectors (where it looks, and its right / up).
+    Vector3 forward = Vector3Normalize( Vector3Subtract( camera->target, camera->position ) );
+    Vector3 right   = Vector3Normalize( Vector3CrossProduct( forward, camera->up ) );
+    Vector3 up      = Vector3CrossProduct( right, forward );
+
+    // viewmodel position: a bit in front of the eye, then to the right and down.
+    Vector3 pos = camera->position;
+    pos = Vector3Add( pos, Vector3Scale( forward, FP_PICKAXE_FORWARD ) );
+    pos = Vector3Add( pos, Vector3Scale( right,   FP_PICKAXE_RIGHT ) );
+    pos = Vector3Add( pos, Vector3Scale( up,      FP_PICKAXE_UP ) );
+
+    // transform whose columns are the camera basis (right, up, back) + position,
+    // so the pickaxe is "stuck" to the camera and follows yaw AND pitch.
+    Vector3 back = Vector3Negate( forward );
+    Matrix viewModel = {
+        right.x, up.x, back.x, pos.x,
+        right.y, up.y, back.y, pos.y,
+        right.z, up.z, back.z, pos.z,
+        0.0f, 0.0f, 0.0f, 1.0f
+    };
+
+    // swing arc (same as the held pickaxe): 0 -> peak -> 0, 0 when idle.
+    float swingAngle = 0.0f;
+    if ( player->swingTimer > 0.0f ) {
+        float progress = 1.0f - player->swingTimer / SWING_DURATION;
+        swingAngle = sinf( progress * PI ) * SWING_AMPLITUDE;
+    }
+
+    rlPushMatrix();
+
+        rlMultMatrixf( MatrixToFloat( viewModel ) );   // adopt the camera frame
+
+        // orient the model within the view.
+        rlRotatef( FP_PICKAXE_ROT_X, 1.0f, 0.0f, 0.0f );
+        rlRotatef( FP_PICKAXE_ROT_Y, 0.0f, 1.0f, 0.0f );
+        rlRotatef( FP_PICKAXE_ROT_Z, 0.0f, 0.0f, 1.0f );
+
+        // swing about the grip (shared PICKAXE_GRIP_*, model's own frame).
+        rlTranslatef( PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
+        rlRotatef( swingAngle, 0.0f, 1.0f, 0.0f );
+        rlTranslatef( -PICKAXE_GRIP_X, -PICKAXE_GRIP_Y, -PICKAXE_GRIP_Z );
+
+        DrawModel( rm.pickaxeModel, (Vector3) { 0 }, player->pickaxeScale, WHITE );
+
+    rlPopMatrix();
+
+}
+
+/**
  * @brief Reads input: sets horizontal velocity (camera-relative) and triggers a
  *        jump. Vertical velocity is otherwise controlled by gravity in update().
  */
@@ -159,6 +220,32 @@ static void input( Player *player ) {
     if ( IsKeyPressed( KEY_L ) ) {
         PICKAXE_GRIP_Z += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
         trace( "x: %.2f, y: %.2f, z: %.2f", PICKAXE_GRIP_X, PICKAXE_GRIP_Y, PICKAXE_GRIP_Z );
+    }*/
+
+    /*if ( IsKeyPressed( KEY_U ) ) {
+        FP_PICKAXE_ROT_X += IsKeyDown( KEY_LEFT_CONTROL ) ? -1 : 1;
+        trace( "x: %.2f, y: %.2f, z: %.2f", FP_PICKAXE_ROT_X, FP_PICKAXE_ROT_Y, FP_PICKAXE_ROT_Z );
+    }
+    if ( IsKeyPressed( KEY_I ) ) {
+        FP_PICKAXE_ROT_Y += IsKeyDown( KEY_LEFT_CONTROL ) ? -1 : 1;
+        trace( "x: %.2f, y: %.2f, z: %.2f", FP_PICKAXE_ROT_X, FP_PICKAXE_ROT_Y, FP_PICKAXE_ROT_Z );
+    }
+    if ( IsKeyPressed( KEY_O ) ) {
+        FP_PICKAXE_ROT_Z += IsKeyDown( KEY_LEFT_CONTROL ) ? -1 : 1;
+        trace( "x: %.2f, y: %.2f, z: %.2f", FP_PICKAXE_ROT_X, FP_PICKAXE_ROT_Y, FP_PICKAXE_ROT_Z );
+    }
+
+    if ( IsKeyPressed( KEY_J ) ) {
+        FP_PICKAXE_FORWARD += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "f: %.2f, r: %.2f, u: %.2f", FP_PICKAXE_FORWARD, FP_PICKAXE_RIGHT, FP_PICKAXE_UP );
+    }
+    if ( IsKeyPressed( KEY_K ) ) {
+        FP_PICKAXE_RIGHT += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "f: %.2f, r: %.2f, u: %.2f", FP_PICKAXE_FORWARD, FP_PICKAXE_RIGHT, FP_PICKAXE_UP );
+    }
+    if ( IsKeyPressed( KEY_L ) ) {
+        FP_PICKAXE_UP += IsKeyDown( KEY_LEFT_CONTROL ) ? -0.05 : 0.05;
+        trace( "f: %.2f, r: %.2f, u: %.2f", FP_PICKAXE_FORWARD, FP_PICKAXE_RIGHT, FP_PICKAXE_UP );
     }*/
 
     // movement intent on two camera-relative axes, -1..+1 each:
