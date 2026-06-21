@@ -25,6 +25,7 @@ static const float JUMP_SPEED          = 9.0f;    // initial upward velocity of 
 static const float MODEL_FACING_OFFSET = 0.0f;    // corrects the model's default facing
 static const float MAX_STEP_HEIGHT     = 1.0f;    // tallest ledge the player auto-steps up
 static const float STICK_DEADZONE      = 0.1f;    // ignore tiny left-stick noise
+static const bool  AUTO_STEP           = false;   // climb 1-block ledges automatically
 
 static const float PICKAXE_TARGET_SCALE = 1.0f;   // desired world size (auto-scaled from the model)
 static const float PICKAXE_OFFSET_X     = -0.3f;   // hand offset: right (+) / left (-)
@@ -489,7 +490,7 @@ static void moveAxis( Player *player, float *coord, float amount ) {
     }
 
     // blocked. only try to climb when on the ground (no wall-climbing mid-air).
-    if ( player->onGround ) {
+    if ( AUTO_STEP && player->onGround ) {
 
         // try the same move lifted by a step: if it's clear now, we climbed a
         // ledge; the gravity + ground snap later this frame settles us onto it.
