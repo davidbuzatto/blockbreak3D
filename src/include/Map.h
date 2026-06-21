@@ -105,7 +105,13 @@ void destroyMap( Map *map );
  */
 int breakBlock( Map *map, int la, int i, int j );
 
-bool placeBlock( Map *map, int la, int i, int j, Color color );
+/**
+ * @brief Places a solid block of 'color' at the (empty) cell (la, i, j) and
+ *        refreshes the geometry. Returns false if the cell is out of bounds or
+ *        already solid, so the caller only spends material on a real placement.
+ *        (pos/dim were already set for every cell by fillMap.)
+ */
+bool placeBlock( Map *map, int la, int i, int j, Color color, BlockType blockType );
 
 /**
  * @brief Returns true if an axis-aligned box (centered at 'center', with the

@@ -41,6 +41,8 @@ static float cameraPitch    = 30.0f;   // vertical angle (deg)
 static float cameraDistance = 10.0f;   // orbit radius (world units)
 static bool firstPerson     = true;    // camera mode: true = first person, false = third person
 
+static BlockType currentBuildType;
+
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );
 static void drawTargetBlockHighlighting( GameWorld *gw );
@@ -290,7 +292,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
                 fabsf( bc.y - gw->player->pos.y ) < ( bs + d.y ) * 0.5f &&
                 fabsf( bc.z - gw->player->pos.z ) < ( bs + d.z ) * 0.5f;
 
-            if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, DARKBROWN ) ) {
+            if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, DARKBROWN, BLOCK_WOOD ) ) {
                 gw->player->availableMaterials -= BUILD_COST;
             }
 

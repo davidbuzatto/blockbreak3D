@@ -13,10 +13,10 @@ typedef enum {
     BLOCK_GRASS,
     BLOCK_DIRT,
     BLOCK_STONE,
+    BLOCK_WOOD,
     BLOCK_IRON,
     BLOCK_GOLD,
-    BLOCK_GEM,
-    BLOCK_PLACED
+    BLOCK_GEM
 } BlockType;
 
 typedef struct Block {

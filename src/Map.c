@@ -147,10 +147,10 @@ static const BlockTiles blockTiles[] = {
     [BLOCK_GRASS]  = { 0, 1, 2 },  // grass top, grass side, dirt bottom
     [BLOCK_DIRT]   = { 2, 2, 2 },
     [BLOCK_STONE]  = { 3, 3, 3 },
-    [BLOCK_IRON]   = { 4, 4, 4 },
-    [BLOCK_GOLD]   = { 5, 5, 5 },
-    [BLOCK_GEM]    = { 6, 6, 6 },
-    [BLOCK_PLACED] = { 7, 7, 7 },
+    [BLOCK_WOOD]   = { 4, 4, 4 },
+    [BLOCK_IRON]   = { 5, 5, 5 },
+    [BLOCK_GOLD]   = { 6, 6, 6 },
+    [BLOCK_GEM]    = { 7, 7, 7 }
 };
 
 /* forward declarations of file-private (static) helpers. */
@@ -336,7 +336,7 @@ int breakBlock( Map *map, int la, int i, int j ) {
  *        already solid, so the caller only spends material on a real placement.
  *        (pos/dim were already set for every cell by fillMap.)
  */
-bool placeBlock( Map *map, int la, int i, int j, Color color ) {
+bool placeBlock( Map *map, int la, int i, int j, Color color, BlockType blockType ) {
 
     // is a valid cell (bound checking)...
     if ( la < 0 || la >= map->layers ||
@@ -355,7 +355,7 @@ bool placeBlock( Map *map, int la, int i, int j, Color color ) {
     // turn it solid.
     map->blocks[p].broken = false;
     map->blocks[p].color = color;
-    map->blocks[p].type = BLOCK_PLACED;
+    map->blocks[p].type = blockType;
     map->blocks[p].hits = 0;
     map->blocks[p].hitsToBreak = 1;
     map->blocks[p].materialsToAquire = 1;
