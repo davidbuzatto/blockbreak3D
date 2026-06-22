@@ -10,13 +10,28 @@
  *        using Block.color, so color and type coexist (no strategy is broken).
  */
 typedef enum {
-    BLOCK_GRASS = 0,
+    BLOCK_GRASS,
     BLOCK_DIRT,
     BLOCK_STONE,
-    BLOCK_WOOD,
+    BLOCK_OAK_PLANKS,
+    BLOCK_OAK_LOG,
+    BLOCK_OAK_LEAVES,
+    BLOCK_WATER,
+    BLOCK_SNOW,
+    BLOCK_GLASS,
+    BLOCK_ICE,
+    BLOCK_IRON_BLOCK,
+    BLOCK_SAND,
+    BLOCK_LAVA,
+    BLOCK_SLATE,
+    BLOCK_OBSIDIAN,
+    BLOCK_BRICKS,
+    BLOCK_MOSSY_STONE,
+    BLOCK_GRAVEL,
     BLOCK_IRON,
     BLOCK_GOLD,
-    BLOCK_GEM
+    BLOCK_GEM,
+    BLOCK_COAL
 } BlockType;
 
 typedef struct Block {

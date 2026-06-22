@@ -20,7 +20,7 @@ int main( void ) {
         "Block Break 3D", // title
         60,               // target FPS
         true,             // antialiasing
-        false,            // resizable
+        true,             // resizable
         false,            // full screen
         false,            // undecorated
         false,            // always on top

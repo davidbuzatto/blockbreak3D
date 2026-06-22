@@ -1,2 +1,1 @@
-Usar shader para iluminação?
-Criar skybox?
+Sound

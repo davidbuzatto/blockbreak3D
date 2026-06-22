@@ -21,6 +21,7 @@
 typedef struct {
     Color color;
     BlockType type;
+    int atlasPos;
 } BuildType;
 
 static const float CAMERA_YAW_SPEED      = 90.0f;   // yaw rotation speed (deg/s)
@@ -46,8 +47,9 @@ static float cameraPitch    = 30.0f;   // vertical angle (deg)
 static float cameraDistance = 10.0f;   // orbit radius (world units)
 static bool firstPerson     = true;    // camera mode: true = first person, false = third person
 
-static BlockType currentBuildType;
-static BuildType buildTypes[4];
+static BuildType buildTypes[40];
+static int buildTypeCount;
+static int currentBuildType;
 
 static void updateCamera( Camera3D *camera, Player *player );
 static void drawHud( GameWorld *gw );
@@ -136,11 +138,26 @@ GameWorld *createGameWorld( void ) {
     }
 
     // build
-    buildTypes[BLOCK_GRASS] = (BuildType) { GREEN, BLOCK_GRASS };
-    buildTypes[BLOCK_DIRT] = (BuildType) { BROWN, BLOCK_DIRT };
-    buildTypes[BLOCK_STONE] = (BuildType) { GRAY, BLOCK_STONE };
-    buildTypes[BLOCK_WOOD] = (BuildType) { DARKBROWN, BLOCK_WOOD };
-    currentBuildType = BLOCK_WOOD;
+    buildTypeCount = 0;
+    buildTypes[BLOCK_GRASS] = (BuildType) { GREEN, BLOCK_GRASS, 0 }; buildTypeCount++;
+    buildTypes[BLOCK_DIRT] = (BuildType) { BROWN, BLOCK_DIRT, 2 }; buildTypeCount++;
+    buildTypes[BLOCK_STONE] = (BuildType) { GRAY, BLOCK_STONE, 3 }; buildTypeCount++;
+    buildTypes[BLOCK_OAK_PLANKS] = (BuildType) { DARKBROWN, BLOCK_OAK_PLANKS, 4 }; buildTypeCount++;
+    buildTypes[BLOCK_OAK_LOG] = (BuildType) { DARKBROWN, BLOCK_OAK_LOG, 5 }; buildTypeCount++;
+    buildTypes[BLOCK_OAK_LEAVES] = (BuildType) { DARKGREEN, BLOCK_OAK_LEAVES, 7 }; buildTypeCount++;
+    buildTypes[BLOCK_WATER] = (BuildType) { BLUE, BLOCK_WATER, 8 }; buildTypeCount++;
+    buildTypes[BLOCK_SNOW] = (BuildType) { WHITE, BLOCK_SNOW, 9 }; buildTypeCount++;
+    buildTypes[BLOCK_GLASS] = (BuildType) { SKYBLUE, BLOCK_GLASS, 10 }; buildTypeCount++;
+    buildTypes[BLOCK_ICE] = (BuildType) { RAYWHITE, BLOCK_ICE, 11 }; buildTypeCount++;
+    buildTypes[BLOCK_IRON_BLOCK] = (BuildType) { LIGHTGRAY, BLOCK_IRON_BLOCK, 12 }; buildTypeCount++;
+    buildTypes[BLOCK_SAND] = (BuildType) { BEIGE, BLOCK_SAND, 13 }; buildTypeCount++;
+    buildTypes[BLOCK_LAVA] = (BuildType) { RED, BLOCK_LAVA, 14 }; buildTypeCount++;
+    buildTypes[BLOCK_SLATE] = (BuildType) { DARKGRAY, BLOCK_SLATE, 15 }; buildTypeCount++;
+    buildTypes[BLOCK_OBSIDIAN] = (BuildType) { BLACK, BLOCK_OBSIDIAN, 16 }; buildTypeCount++;
+    buildTypes[BLOCK_BRICKS] = (BuildType) { MAROON, BLOCK_BRICKS, 17 }; buildTypeCount++;
+    buildTypes[BLOCK_MOSSY_STONE] = (BuildType) { GREEN, BLOCK_MOSSY_STONE, 18 }; buildTypeCount++;
+    buildTypes[BLOCK_GRAVEL] = (BuildType) { BROWN, BLOCK_GRAVEL, 19 }; buildTypeCount++;
+    currentBuildType = 3;
 
     return gw;
 
@@ -314,27 +331,13 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     }
 
     // change build type
-    // keyboard
-    if ( IsKeyPressed( KEY_ONE ) ) {
-        currentBuildType = BLOCK_GRASS;
-    } else if ( IsKeyPressed( KEY_TWO ) ) {
-        currentBuildType = BLOCK_DIRT;
-    } else if ( IsKeyPressed( KEY_THREE ) ) {
-        currentBuildType = BLOCK_STONE;
-    } else if ( IsKeyPressed( KEY_FOUR ) ) {
-        currentBuildType = BLOCK_WOOD;
-    }
-
-    // joystick
-    if ( IsGamepadAvailable( 0 ) ) {
-        if ( IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_LEFT_TRIGGER_1 ) ) {
-            currentBuildType--;
-            if ( (int) currentBuildType < 0 ) {
-                currentBuildType = BLOCK_WOOD;
-            }
-        } else if ( IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1 ) ) {
-            currentBuildType = ( currentBuildType + 1 ) % 4;
+    if ( IsKeyPressed( KEY_ONE ) || ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_LEFT_TRIGGER_1 ) ) ) {
+        currentBuildType--;
+        if ( currentBuildType < 0 ) {
+            currentBuildType = buildTypeCount - 1;
         }
+    } else if ( IsKeyPressed( KEY_TWO ) || ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_1 ) ) ) {
+        currentBuildType = ( currentBuildType + 1 ) % buildTypeCount;
     }
 
 }
@@ -436,8 +439,7 @@ static void drawHud( GameWorld *gw ) {
     int sourceW = 128;
     int hSpace = 10;
     int fontSize = 20;
-    int blockTypesCount = 4;
-    int blockTypeMenuW = 175;
+    int blockTypeMenuW = buildTypeCount * ( tileW + hSpace ) - hSpace + marginX * 2;
     int xIni = GetScreenWidth() / 2 - blockTypeMenuW / 2 - 2;
 
     DrawRectangleRounded(
@@ -447,10 +449,12 @@ static void drawHud( GameWorld *gw ) {
         Fade( WHITE, 0.5f )
     );
 
-    for ( int i = 0; i < blockTypesCount; i++ ) {
+    for ( int i = 0; i < buildTypeCount; i++ ) {
 
-        int col = ( i + 1 ) % ATLAS_COLS;
-        int row = ( i + 1 ) / ATLAS_COLS;
+        BuildType *bt = &buildTypes[i];
+
+        int col = ( bt->atlasPos ) % ATLAS_COLS;
+        int row = ( bt->atlasPos ) / ATLAS_COLS;
 
         DrawTexturePro(
             rm.blockTypeAtlas,
@@ -465,7 +469,7 @@ static void drawHud( GameWorld *gw ) {
             WHITE
         );
 
-        const char *text = TextFormat( "%d", i + 1 );
+        /*const char *text = TextFormat( "%d", i + 1 );
         int textW = MeasureText( text, fontSize );
         DrawText( 
             TextFormat( "%d", i + 1 ),
@@ -473,7 +477,7 @@ static void drawHud( GameWorld *gw ) {
             marginY + yStart + fontSize / 2 - 2,
             fontSize,
             WHITE
-        );
+        );*/
 
     }
 
@@ -505,7 +509,7 @@ static void drawHud( GameWorld *gw ) {
     int fps = GetFPS();
     const char *textFPS = TextFormat( "%d FPS", fps );
     int fpsW = MeasureText( textFPS, fontSize );
-    DrawFPS( GetScreenWidth() - fpsW - marginX, marginY );
+    DrawFPS( GetScreenWidth() - fpsW - marginX, GetScreenHeight() - marginY - 20 );
 
 }
 

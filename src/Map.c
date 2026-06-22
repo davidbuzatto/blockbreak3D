@@ -142,13 +142,28 @@ typedef struct {
 } BlockTiles;
 
 static const BlockTiles blockTiles[] = {
-    [BLOCK_GRASS]  = { 0, 1, 2 },  // grass top, grass side, dirt bottom
-    [BLOCK_DIRT]   = { 2, 2, 2 },
-    [BLOCK_STONE]  = { 3, 3, 3 },
-    [BLOCK_WOOD]   = { 4, 4, 4 },
-    [BLOCK_IRON]   = { 5, 5, 5 },
-    [BLOCK_GOLD]   = { 6, 6, 6 },
-    [BLOCK_GEM]    = { 7, 7, 7 }
+    [BLOCK_GRASS]       = {  0,  1,  2 },  // grass top, grass side, dirt bottom
+    [BLOCK_DIRT]        = {  2,  2,  2 },
+    [BLOCK_STONE]       = {  3,  3,  3 },
+    [BLOCK_OAK_PLANKS]  = {  4,  4,  4 },
+    [BLOCK_OAK_LOG]     = {  5,  6,  5 },  // oak log, oak side, oak log
+    [BLOCK_OAK_LEAVES]  = {  7,  7,  7 },
+    [BLOCK_WATER]       = {  8,  8,  8 },
+    [BLOCK_SNOW]        = {  9,  9,  9 },
+    [BLOCK_GLASS]       = { 10, 10, 10 },
+    [BLOCK_ICE]         = { 11, 11, 11 },
+    [BLOCK_IRON_BLOCK]  = { 12, 12, 12 },
+    [BLOCK_SAND]        = { 13, 13, 13 },
+    [BLOCK_LAVA]        = { 14, 14, 14 },
+    [BLOCK_SLATE]       = { 15, 15, 15 },
+    [BLOCK_OBSIDIAN]    = { 16, 16, 16 },
+    [BLOCK_BRICKS]      = { 17, 17, 17 },
+    [BLOCK_MOSSY_STONE] = { 18, 18, 18 },
+    [BLOCK_GRAVEL]      = { 19, 19, 19 },
+    [BLOCK_IRON]        = { 20, 20, 20 },
+    [BLOCK_GOLD]        = { 21, 21, 21 },
+    [BLOCK_GEM]         = { 22, 22, 22 },
+    [BLOCK_COAL]        = { 23, 23, 23 }
 };
 
 /* forward declarations of file-private (static) helpers. */
@@ -217,6 +232,7 @@ Map *createMap( int x, int y, int z, int layers, int rows, int cols, int blockSi
     OreType oreTypes[] = {
         { 0.14f, 0.45f, 900.0f, BLUE,   BLOCK_GEM,  15 },   // gem (rarest, most valuable)
         { 0.12f, 0.38f, 500.0f, GOLD,   BLOCK_GOLD,  8 },   // gold
+        { 0.11f, 0.34f, 300.0f, BLACK,  BLOCK_COAL,  1 },   // coal
         { 0.10f, 0.30f, 200.0f, ORANGE, BLOCK_IRON,  3 },   // iron (most common)
     };
     int oreTypeCount = sizeof( oreTypes ) / sizeof( OreType );
