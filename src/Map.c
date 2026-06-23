@@ -379,7 +379,7 @@ bool placeBlock( Map *map, int la, int i, int j, BuildType *buildType ) {
     map->blocks[p].soundTypeOnBreak = buildType->soundTypeOnBreak;
     map->blocks[p].materialsToAquire = 1;
 
-    // plays the sound of the block type
+    // plays the sound of place block
     playSoundFromSoundPool( rm.soundPools[SOUND_TYPE_PLACE] );
 
     refreshGeometryAfterEdit( map, i, j );

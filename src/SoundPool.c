@@ -14,8 +14,13 @@ SoundPool *createSoundPool( const char *soundPath, int quantity ) {
 
     new->pool = (Sound*) malloc( sizeof( Sound ) * quantity );
 
-    for ( int i = 0; i < quantity; i++ ) {
-        new->pool[i] = LoadSound( soundPath );
+    // load the audio data only once: pool[0] owns it, and the remaining voices
+    // are lightweight aliases that share that same data but keep their own
+    // playback state. this lets the sound overlap with itself without decoding
+    // the file N times or duplicating its samples in memory.
+    new->pool[0] = LoadSound( soundPath );
+    for ( int i = 1; i < quantity; i++ ) {
+        new->pool[i] = LoadSoundAlias( new->pool[0] );
     }
 
     return new;
@@ -25,9 +30,12 @@ SoundPool *createSoundPool( const char *soundPath, int quantity ) {
 void destroySoundPool( SoundPool *soundPool ) {
     if ( soundPool != NULL ) {
         if ( soundPool->pool != NULL ) {
-            for ( int i = 0; i < soundPool->quantity; i++ ) {
-                UnloadSound( soundPool->pool[i] );
+            // unload the aliases first (each frees only its own playback voice,
+            // not the shared data), then the owner, which frees the audio data.
+            for ( int i = 1; i < soundPool->quantity; i++ ) {
+                UnloadSoundAlias( soundPool->pool[i] );
             }
+            UnloadSound( soundPool->pool[0] );
             free( soundPool->pool );
         }
         free( soundPool );
