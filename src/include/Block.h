@@ -4,6 +4,8 @@
 
 #include "raylib/raylib.h"
 
+#include "SoundPool.h"
+
 /**
  * @brief The material a block is made of. It selects which atlas tile(s) the
  *        textured render strategy uses for each face. The older strategies keep
@@ -41,8 +43,9 @@ typedef struct Block {
     Color color;
     BlockType type;    // material; selects atlas tiles in the textured strategy
 
-    int hitsToBreak;
     int hits;
+    int hitsToBreak;
+    SoundType soundTypeOnBreak;
 
     int materialsToAquire;
 

@@ -9,6 +9,8 @@
 
 #include "raylib/raylib.h"
 
+#include "SoundPool.h"
+
 typedef struct ResourceManager {
 
     Model playerModel;      // the player's 3D model (character-k.glb)
@@ -19,6 +21,8 @@ typedef struct ResourceManager {
 
     Shader skyboxShader;         // skybox draw shader (raylib official example)
     Shader skyboxCubemapShader;  // panorama -> cubemap conversion shader (raylib official example)
+
+    SoundPool *soundPools[10];
 
 } ResourceManager;
 

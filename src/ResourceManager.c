@@ -46,14 +46,37 @@ void loadResourcesResourceManager( void ) {
         TextFormat( "resources/shaders/glsl%i/cubemap.vs", GLSL_VERSION ),
         TextFormat( "resources/shaders/glsl%i/cubemap.fs", GLSL_VERSION )
     );
+
+    int soundPoolSize = 5;
+    rm.soundPools[SOUND_TYPE_CLOTH] = createSoundPool( "resources/sfx/cloth1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_GRASS] = createSoundPool( "resources/sfx/grass1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_GRAVEL] = createSoundPool( "resources/sfx/gravel1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_PLACE] = createSoundPool( "resources/sfx/place1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_SAND] = createSoundPool( "resources/sfx/sand1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_SNOW] = createSoundPool( "resources/sfx/snow1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_STONE] = createSoundPool( "resources/sfx/stone1.ogg", soundPoolSize );
+    rm.soundPools[SOUND_TYPE_WOOD] = createSoundPool( "resources/sfx/wood1.ogg", soundPoolSize );
     
 }
 
 void unloadResourcesResourceManager( void ) {
+
     UnloadModel( rm.playerModel );
     UnloadModel( rm.pickaxeModel );
+
     UnloadTexture( rm.blockTypeAtlas );
     UnloadTexture( rm.skyPanorama );
+
     UnloadShader( rm.skyboxShader );
     UnloadShader( rm.skyboxCubemapShader );
+
+    destroySoundPool( rm.soundPools[SOUND_TYPE_CLOTH] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_GRASS] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_GRAVEL] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_PLACE] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_SAND] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_SNOW] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_STONE] );
+    destroySoundPool( rm.soundPools[SOUND_TYPE_WOOD] );
+
 }

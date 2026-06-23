@@ -91,6 +91,16 @@ struct RayHit {
 };
 
 /**
+ * @brief Defines a type of block that will be build
+ */
+typedef struct {
+    Color color;
+    int atlasPos;
+    BlockType blockType;
+    SoundType soundTypeOnBreak;
+} BuildType;
+
+/**
  * @brief Creates a map, generates its terrain and builds its render mesh.
  * @see createMap implementation in Map.c for parameter details.
  */
@@ -114,7 +124,7 @@ int breakBlock( Map *map, int la, int i, int j );
  *        already solid, so the caller only spends material on a real placement.
  *        (pos/dim were already set for every cell by fillMap.)
  */
-bool placeBlock( Map *map, int la, int i, int j, Color color, BlockType blockType );
+bool placeBlock( Map *map, int la, int i, int j, BuildType *buildType );
 
 /**
  * @brief Returns true if an axis-aligned box (centered at 'center', with the

@@ -17,12 +17,7 @@
 #include "Map.h"
 #include "Player.h"
 #include "ResourceManager.h"
-
-typedef struct {
-    Color color;
-    BlockType type;
-    int atlasPos;
-} BuildType;
+#include "SoundPool.h"
 
 static const float CAMERA_YAW_SPEED      = 90.0f;   // yaw rotation speed (deg/s)
 static const float CAMERA_PITCH_SPEED    = 90.0f;   // pitch rotation speed (deg/s)
@@ -65,8 +60,8 @@ GameWorld *createGameWorld( void ) {
 
     GameWorld *gw = (GameWorld*) malloc( sizeof( GameWorld ) );
 
-    int rows = 100;
-    int cols = 100;
+    int rows = 30;
+    int cols = 30;
     int layers = 50;
 
     gw->map = createMap( -cols/2, 0, -rows/2, layers, rows, cols, 1 );
@@ -139,24 +134,24 @@ GameWorld *createGameWorld( void ) {
 
     // build
     buildTypeCount = 0;
-    buildTypes[BLOCK_GRASS] = (BuildType) { GREEN, BLOCK_GRASS, 0 }; buildTypeCount++;
-    buildTypes[BLOCK_DIRT] = (BuildType) { BROWN, BLOCK_DIRT, 2 }; buildTypeCount++;
-    buildTypes[BLOCK_STONE] = (BuildType) { GRAY, BLOCK_STONE, 3 }; buildTypeCount++;
-    buildTypes[BLOCK_OAK_PLANKS] = (BuildType) { DARKBROWN, BLOCK_OAK_PLANKS, 4 }; buildTypeCount++;
-    buildTypes[BLOCK_OAK_LOG] = (BuildType) { DARKBROWN, BLOCK_OAK_LOG, 5 }; buildTypeCount++;
-    buildTypes[BLOCK_OAK_LEAVES] = (BuildType) { DARKGREEN, BLOCK_OAK_LEAVES, 7 }; buildTypeCount++;
-    buildTypes[BLOCK_WATER] = (BuildType) { BLUE, BLOCK_WATER, 8 }; buildTypeCount++;
-    buildTypes[BLOCK_SNOW] = (BuildType) { WHITE, BLOCK_SNOW, 9 }; buildTypeCount++;
-    buildTypes[BLOCK_GLASS] = (BuildType) { SKYBLUE, BLOCK_GLASS, 10 }; buildTypeCount++;
-    buildTypes[BLOCK_ICE] = (BuildType) { RAYWHITE, BLOCK_ICE, 11 }; buildTypeCount++;
-    buildTypes[BLOCK_IRON_BLOCK] = (BuildType) { LIGHTGRAY, BLOCK_IRON_BLOCK, 12 }; buildTypeCount++;
-    buildTypes[BLOCK_SAND] = (BuildType) { BEIGE, BLOCK_SAND, 13 }; buildTypeCount++;
-    buildTypes[BLOCK_LAVA] = (BuildType) { RED, BLOCK_LAVA, 14 }; buildTypeCount++;
-    buildTypes[BLOCK_SLATE] = (BuildType) { DARKGRAY, BLOCK_SLATE, 15 }; buildTypeCount++;
-    buildTypes[BLOCK_OBSIDIAN] = (BuildType) { BLACK, BLOCK_OBSIDIAN, 16 }; buildTypeCount++;
-    buildTypes[BLOCK_BRICKS] = (BuildType) { MAROON, BLOCK_BRICKS, 17 }; buildTypeCount++;
-    buildTypes[BLOCK_MOSSY_STONE] = (BuildType) { GREEN, BLOCK_MOSSY_STONE, 18 }; buildTypeCount++;
-    buildTypes[BLOCK_GRAVEL] = (BuildType) { BROWN, BLOCK_GRAVEL, 19 }; buildTypeCount++;
+    buildTypes[BLOCK_GRASS]       = (BuildType) { GREEN,      0, BLOCK_GRASS,       SOUND_TYPE_GRASS  }; buildTypeCount++;
+    buildTypes[BLOCK_DIRT]        = (BuildType) { BROWN,      2, BLOCK_DIRT,        SOUND_TYPE_GRAVEL }; buildTypeCount++;
+    buildTypes[BLOCK_STONE]       = (BuildType) { GRAY,       3, BLOCK_STONE,       SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_OAK_PLANKS]  = (BuildType) { DARKBROWN,  4, BLOCK_OAK_PLANKS,  SOUND_TYPE_WOOD   }; buildTypeCount++;
+    buildTypes[BLOCK_OAK_LOG]     = (BuildType) { DARKBROWN,  5, BLOCK_OAK_LOG,     SOUND_TYPE_WOOD   }; buildTypeCount++;
+    buildTypes[BLOCK_OAK_LEAVES]  = (BuildType) { DARKGREEN,  7, BLOCK_OAK_LEAVES,  SOUND_TYPE_GRASS  }; buildTypeCount++;
+    buildTypes[BLOCK_WATER]       = (BuildType) { BLUE,       8, BLOCK_WATER,       SOUND_TYPE_SNOW   }; buildTypeCount++;
+    buildTypes[BLOCK_SNOW]        = (BuildType) { WHITE,      9, BLOCK_SNOW,        SOUND_TYPE_SNOW   }; buildTypeCount++;
+    buildTypes[BLOCK_GLASS]       = (BuildType) { SKYBLUE,   10, BLOCK_GLASS,       SOUND_TYPE_SNOW   }; buildTypeCount++;
+    buildTypes[BLOCK_ICE]         = (BuildType) { RAYWHITE,  11, BLOCK_ICE,         SOUND_TYPE_SNOW   }; buildTypeCount++;
+    buildTypes[BLOCK_IRON_BLOCK]  = (BuildType) { LIGHTGRAY, 12, BLOCK_IRON_BLOCK,  SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_SAND]        = (BuildType) { BEIGE,     13, BLOCK_SAND,        SOUND_TYPE_SAND   }; buildTypeCount++;
+    buildTypes[BLOCK_LAVA]        = (BuildType) { RED,       14, BLOCK_LAVA,        SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_SLATE]       = (BuildType) { DARKGRAY,  15, BLOCK_SLATE,       SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_OBSIDIAN]    = (BuildType) { BLACK,     16, BLOCK_OBSIDIAN,    SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_BRICKS]      = (BuildType) { MAROON,    17, BLOCK_BRICKS,      SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_MOSSY_STONE] = (BuildType) { GREEN,     18, BLOCK_MOSSY_STONE, SOUND_TYPE_STONE  }; buildTypeCount++;
+    buildTypes[BLOCK_GRAVEL]      = (BuildType) { BROWN,     19, BLOCK_GRAVEL,      SOUND_TYPE_GRAVEL }; buildTypeCount++;
     currentBuildType = 3;
 
     return gw;
@@ -287,10 +282,13 @@ void updateGameWorld( GameWorld *gw, float delta ) {
     // the pickaxe; break the aimed block too if there is one.
     if ( IsMouseButtonPressed( MOUSE_BUTTON_LEFT ) || IsKeyPressed( KEY_B ) ||
           ( IsGamepadAvailable( 0 ) && IsGamepadButtonPressed( 0, GAMEPAD_BUTTON_RIGHT_TRIGGER_2 ) ) ) {
+
         playerSwingPickaxe( gw->player );
+
         if ( gw->targetBlock.hit ) {
             gw->player->availableMaterials += breakBlock( gw->map, gw->targetBlock.la, gw->targetBlock.i, gw->targetBlock.j );
         }
+
     }
 
     // on a "place" input (right mouse / C / gamepad left trigger), always swing;
@@ -322,7 +320,7 @@ void updateGameWorld( GameWorld *gw, float delta ) {
                 fabsf( bc.y - gw->player->pos.y ) < ( bs + d.y ) * 0.5f &&
                 fabsf( bc.z - gw->player->pos.z ) < ( bs + d.z ) * 0.5f;
 
-            if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, buildTypes[currentBuildType].color, buildTypes[currentBuildType].type ) ) {
+            if ( !overlapsPlayer && placeBlock( gw->map, pla, pi, pj, &buildTypes[currentBuildType] ) ) {
                 gw->player->availableMaterials -= BUILD_COST;
             }
 

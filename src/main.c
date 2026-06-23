@@ -27,7 +27,7 @@ int main( void ) {
         false,            // invisible background
         false,            // always run
         true,             // load resources
-        false             // init audio
+        true              // init audio
     );
 
     initGameWindow( gameWindow );

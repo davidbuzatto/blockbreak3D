@@ -41,6 +41,7 @@
 #include "Macros.h"
 #include "Map.h"
 #include "ResourceManager.h"
+#include "SoundPool.h"
 
 #define CHUNK_SIZE 16
 
@@ -334,6 +335,9 @@ int breakBlock( Map *map, int la, int i, int j ) {
 
     int materialsToAquire = map->blocks[p].materialsToAquire;
 
+    // plays the sound of the block type
+    playSoundFromSoundPool( rm.soundPools[map->blocks[p].soundTypeOnBreak] );
+
     // 1) change the data: the block becomes air.
     map->blocks[p].broken = true;
 
@@ -350,7 +354,7 @@ int breakBlock( Map *map, int la, int i, int j ) {
  *        already solid, so the caller only spends material on a real placement.
  *        (pos/dim were already set for every cell by fillMap.)
  */
-bool placeBlock( Map *map, int la, int i, int j, Color color, BlockType blockType ) {
+bool placeBlock( Map *map, int la, int i, int j, BuildType *buildType ) {
 
     // is a valid cell (bound checking)...
     if ( la < 0 || la >= map->layers ||
@@ -368,11 +372,15 @@ bool placeBlock( Map *map, int la, int i, int j, Color color, BlockType blockTyp
 
     // turn it solid.
     map->blocks[p].broken = false;
-    map->blocks[p].color = color;
-    map->blocks[p].type = blockType;
+    map->blocks[p].color = buildType->color;
+    map->blocks[p].type = buildType->blockType;
     map->blocks[p].hits = 0;
     map->blocks[p].hitsToBreak = 1;
+    map->blocks[p].soundTypeOnBreak = buildType->soundTypeOnBreak;
     map->blocks[p].materialsToAquire = 1;
+
+    // plays the sound of the block type
+    playSoundFromSoundPool( rm.soundPools[SOUND_TYPE_PLACE] );
 
     refreshGeometryAfterEdit( map, i, j );
     return true;
@@ -603,6 +611,7 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
                 Color color = ORANGE;
                 BlockType type = BLOCK_STONE;
                 int hitsToBreak = 1;
+                SoundType soundTypeOnBreak = SOUND_TYPE_STONE;
                 int materialsToAquire = 1;
 
                 // everything above the surface is air.
@@ -612,13 +621,16 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
                 if ( la == h ) {
                     color = GREEN;
                     type = BLOCK_GRASS;
+                    soundTypeOnBreak = SOUND_TYPE_GRASS;
                 } else if ( la >= h - 2 ) {
                     color = BROWN;
                     type = BLOCK_DIRT;
+                    soundTypeOnBreak = SOUND_TYPE_GRAVEL;
                 } else {
 
                     color = GRAY;
                     type = BLOCK_STONE;
+                    soundTypeOnBreak = SOUND_TYPE_STONE;
 
                     // ore veins: test each ore's own 3D noise; the first (rarest)
                     // match wins, so overlapping veins give the more valuable ore.
@@ -659,8 +671,9 @@ static void fillMap( Map *map, float scale, float seed, OreType *oreTypes, int o
                     },
                     .color = color,
                     .type = type,
-                    .hitsToBreak = hitsToBreak,
                     .hits = 0,
+                    .hitsToBreak = hitsToBreak,
+                    .soundTypeOnBreak = soundTypeOnBreak,
                     .materialsToAquire = materialsToAquire,
                     .broken = broken
                 };
